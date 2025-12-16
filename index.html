@@ -1,308 +1,268 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Red vs Blue – Pokémon Battle Tournament</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Red vs Blue Battle Sim</title>
 
-<style>
-body {
-  margin: 0;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-  background: #0b0b0b;
-  color: #eee;
-}
-header {
-  padding: 12px;
-  text-align: center;
-  background: linear-gradient(90deg, #b30000, #0033cc);
-  font-weight: 900;
-}
-main { padding: 12px; max-width: 1100px; margin: auto; }
+  <link rel="manifest" href="./manifest.json" />
+  <meta name="theme-color" content="#111111" />
 
-.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-button, select, input {
-  background: #1e1e1e;
-  color: #fff;
-  border: 1px solid #333;
-  border-radius: 8px;
-  padding: 6px 10px;
-}
-button:hover { background:#2a2a2a; cursor:pointer; }
+  <style>
+    :root{
+      --bg:#0b0b0b; --panel:#111; --panel2:#0f0f0f; --text:#eee; --muted:#bdbdbd;
+      --line:#222; --btn:#1e1e1e; --btn2:#2a2a2a;
+      --red:#b30000; --blue:#0033cc; --good:#7CFC00;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text)}
+    header{
+      padding:12px;text-align:center;font-weight:900;
+      background:linear-gradient(90deg,var(--red),var(--blue));
+    }
+    main{max-width:1150px;margin:0 auto;padding:12px}
+    .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    input,select,button{
+      background:var(--btn);color:var(--text);border:1px solid #333;border-radius:10px;
+      padding:8px 10px;font-size:14px
+    }
+    button:hover{background:var(--btn2);cursor:pointer}
+    button:disabled{opacity:.45;cursor:not-allowed}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap}
+    .tabBtn{font-weight:800}
+    .tabBtn.active{outline:2px solid #444}
+    .split{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    @media(max-width:900px){.split{grid-template-columns:1fr}}
+    .teamHead{display:flex;justify-content:space-between;align-items:center;font-weight:900}
+    .meta{color:var(--muted);font-size:13px}
+    ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+    li{display:flex;justify-content:space-between;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:8px}
+    .mon{display:flex;gap:10px;align-items:center}
+    .sprite img{width:52px;height:52px;object-fit:contain;image-rendering:auto}
+    .actions{display:flex;gap:6px;align-items:center}
+    .mini{padding:6px 8px;border-radius:10px}
+    .hud{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .hudCard{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:10px}
+    .bar{height:10px;background:#222;border-radius:999px;overflow:hidden}
+    .fill{height:100%;width:50%;background:var(--good)}
+    .shake{animation:shake .22s linear}
+    @keyframes shake{0%{transform:translateX(0)}25%{transform:translateX(-3px)}50%{transform:translateX(3px)}75%{transform:translateX(-2px)}100%{transform:translateX(0)}}
+    #log{white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#000;border-radius:12px;padding:10px;height:240px;overflow:auto;border:1px solid #111}
+    .ballsRow{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+    .ball{width:14px;height:14px;border-radius:50%;border:1px solid #555;background:#eee;position:relative}
+    .ball:after{content:"";position:absolute;left:50%;top:50%;width:100%;height:2px;background:#555;transform:translate(-50%,-50%)}
+    .ball.fainted{background:#444;border-color:#333;opacity:.55}
+    .ball.empty{background:transparent;border:1px dashed #333;opacity:.35}
+    .badge{padding:3px 8px;border-radius:999px;border:1px solid #333;background:#151515;font-size:12px;color:var(--muted)}
+    .right{margin-left:auto}
+    .hidden{display:none!important}
 
-.panel {
-  border: 1px solid #222;
-  border-radius: 12px;
-  padding: 10px;
-  margin: 10px 0;
-  background: #111;
-}
+    /* Tournament bracket */
+    .bracket{display:flex;gap:18px;overflow-x:auto;padding-bottom:6px}
+    .round{min-width:220px}
+    .roundTitle{font-weight:900;margin-bottom:8px}
+    .match{border:1px solid #333;background:var(--panel2);border-radius:12px;padding:8px;margin-bottom:10px}
+    .line{display:flex;justify-content:space-between;gap:8px;align-items:center}
+    .winner{color:var(--good);font-weight:900}
+    .watch{font-size:12px;padding:6px 8px}
 
-.teamHeader {
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  font-weight:800;
-}
+    /* Modal */
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.82);display:flex;align-items:center;justify-content:center;padding:14px;z-index:999}
+    .modalCard{background:var(--panel);border:1px solid #333;border-radius:16px;max-width:980px;width:100%;max-height:92vh;overflow:auto}
+    .modalHead{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:1px solid #222}
+    .modalBody{padding:12px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    @media(max-width:900px){.grid2{grid-template-columns:1fr}}
 
-.ballsRow { display:flex; gap:6px; margin-top:6px; }
-.ball {
-  width:14px;height:14px;border-radius:50%;
-  border:1px solid #555;background:#eee;
-  position:relative;
-}
-.ball:after {
-  content:"";position:absolute;left:50%;top:50%;
-  width:100%;height:2px;background:#555;
-  transform:translate(-50%,-50%);
-}
-.ball.fainted { background:#444; opacity:.5; }
-
-#log {
-  white-space: pre-wrap;
-  font-family: monospace;
-  background:#000;
-  padding:10px;
-  border-radius:8px;
-  height:220px;
-  overflow:auto;
-}
-
-.bracket {
-  display:flex;
-  gap:20px;
-  overflow-x:auto;
-}
-.round {
-  min-width:180px;
-}
-.match {
-  border:1px solid #333;
-  border-radius:8px;
-  padding:6px;
-  margin-bottom:10px;
-}
-.match .winner {
-  font-weight:900;
-  color:#7CFC00;
-}
-
-.modal {
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,.85);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-}
-.modal.hidden { display:none; }
-.modalContent {
-  background:#111;
-  border-radius:14px;
-  padding:14px;
-  max-width:90%;
-  max-height:90%;
-  overflow:auto;
-}
-</style>
+    /* Pokedex */
+    .dexGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+    @media(max-width:900px){.dexGrid{grid-template-columns:1fr}}
+    .dexItem{border:1px solid #333;background:var(--panel2);border-radius:12px;padding:8px;display:flex;gap:10px}
+    .dexItem img{width:56px;height:56px;object-fit:contain}
+    .dexDetails{color:var(--muted);font-size:13px}
+  </style>
 </head>
 
 <body>
-<header>🏆 Pokémon Battle Tournament Simulator</header>
+<header>⚔️ Red vs Blue Battle Sim</header>
 
 <main>
 
-<div class="panel row">
-  <input id="redName" placeholder="Red Team Name" value="Red"/>
-  <input id="blueName" placeholder="Blue Team Name" value="Blue"/>
-  <button id="ttsBtn">🎙️ Announcer OFF</button>
-  <select id="voiceSelect"></select>
-  <select id="speedSelect">
-    <option value="1200">Slow</option>
-    <option value="700" selected>Normal</option>
-    <option value="300">Fast</option>
-  </select>
-</div>
-
-<div class="panel row">
-  <button id="simBtn">⚔️ Battle</button>
-  <button id="tournamentBtn">🏆 Tournament</button>
-  <select id="tournamentSize">
-    <option value="4">4 Teams</option>
-    <option value="8" selected>8 Teams</option>
-    <option value="16">16 Teams</option>
-  </select>
-</div>
-
-<div class="panel">
-  <div class="teamHeader">
-    <span id="redTitle">Red</span>
-    <span id="redCount"></span>
+  <!-- Tabs -->
+  <div class="panel tabs">
+    <button class="tabBtn active" data-tab="battle">Battle</button>
+    <button class="tabBtn" data-tab="tournament">Tournament</button>
+    <button class="tabBtn" data-tab="pokedex">Pokédex</button>
+    <button class="tabBtn" data-tab="leaderboard">Leaderboard</button>
+    <span class="badge right" id="status">Loading…</span>
   </div>
-  <div id="redBalls" class="ballsRow"></div>
-</div>
 
-<div class="panel">
-  <div class="teamHeader">
-    <span id="blueTitle">Blue</span>
-    <span id="blueCount"></span>
-  </div>
-  <div id="blueBalls" class="ballsRow"></div>
-</div>
+  <!-- Battle Tab -->
+  <section id="tab-battle" class="panel">
+    <div class="row">
+      <input id="redName" placeholder="Red Team Name" />
+      <input id="blueName" placeholder="Blue Team Name" />
 
-<div class="panel">
-  <strong>Battle Log</strong>
-  <div id="log"></div>
-</div>
+      <button id="ttsBtn">🔊 Announcer: OFF</button>
+      <select id="voiceSelect"></select>
 
-<div class="panel">
-  <strong>Tournament Bracket</strong>
-  <div id="bracket" class="bracket"></div>
-</div>
+      <label class="row" style="gap:6px">
+        <span class="meta">Speed</span>
+        <select id="speedSelect">
+          <option value="1200">Slow</option>
+          <option value="700" selected>Normal</option>
+          <option value="300">Fast</option>
+        </select>
+      </label>
+
+      <button id="installHintBtn" class="mini">📲 Install</button>
+    </div>
+
+    <hr style="border:0;border-top:1px solid #222;margin:12px 0" />
+
+    <div class="split">
+      <div>
+        <div class="row">
+          <input id="searchName" placeholder="Type a Pokémon name (e.g., pikachu)" style="flex:1;min-width:220px" />
+          <select id="teamPick">
+            <option value="red">Red</option>
+            <option value="blue">Blue</option>
+          </select>
+          <select id="levelPick">
+            <option>10</option><option>25</option><option selected>50</option><option>75</option><option>100</option>
+          </select>
+          <button id="addBtn">➕ Add</button>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <button id="randomBtn">🎲 Random Teams</button>
+          <button id="clearBtn">🧹 Clear</button>
+          <button id="simBtn">⚔️ Sim Battle</button>
+          <button id="stepBtn" disabled>Step</button>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <button id="saveTeamBtn">💾 Save Teams</button>
+          <select id="savedTeamsSelect"><option value="">Saved teams…</option></select>
+          <button id="loadSavedBtn">📥 Load</button>
+          <button id="deleteSavedBtn" class="mini">🗑️</button>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <span class="badge" id="redPill">0 Pokémon</span>
+          <span class="badge" id="bluePill">0 Pokémon</span>
+          <span class="badge" id="battleStatus">No battle yet</span>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <div style="flex:1">
+            <div class="teamHead"><span id="redTitle">Red</span><span id="redCount" class="meta">0/0</span></div>
+            <div id="redBalls" class="ballsRow"></div>
+            <ul id="redList" style="margin-top:10px"></ul>
+          </div>
+          <div style="flex:1">
+            <div class="teamHead"><span id="blueTitle">Blue</span><span id="blueCount" class="meta">0/0</span></div>
+            <div id="blueBalls" class="ballsRow"></div>
+            <ul id="blueList" style="margin-top:10px"></ul>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="hud">
+          <div class="hudCard" id="hudRed">
+            <div class="teamHead"><span id="hudRedName">Red</span><span id="redActiveName" class="meta"></span></div>
+            <div class="meta" id="redTypes"></div>
+            <div class="bar" style="margin-top:8px"><div class="fill" id="redHpFill"></div></div>
+            <div class="meta" id="redHpText" style="margin-top:6px">HP: —</div>
+          </div>
+          <div class="hudCard" id="hudBlue">
+            <div class="teamHead"><span id="hudBlueName">Blue</span><span id="blueActiveName" class="meta"></span></div>
+            <div class="meta" id="blueTypes"></div>
+            <div class="bar" style="margin-top:8px"><div class="fill" id="blueHpFill"></div></div>
+            <div class="meta" id="blueHpText" style="margin-top:6px">HP: —</div>
+          </div>
+        </div>
+
+        <div class="panel" style="margin-top:10px">
+          <div class="teamHead">
+            <span>Battle Log</span>
+            <button id="clearLogBtn" class="mini">Clear Log</button>
+          </div>
+          <div id="log"></div>
+          <div id="secretBox" class="panel hidden" style="margin-top:10px"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tournament Tab -->
+  <section id="tab-tournament" class="panel hidden">
+    <div class="row">
+      <button id="tournamentBtn">🏆 Run Tournament</button>
+      <select id="tournamentSize">
+        <option value="4">4 teams</option>
+        <option value="8" selected>8 teams</option>
+        <option value="16">16 teams</option>
+      </select>
+      <span class="meta">Uses saved teams first; fills remaining with CPU random teams.</span>
+    </div>
+
+    <div class="row" style="margin-top:10px">
+      <button id="tournamentLiveBtn" class="mini">🎥 Live Watch Matches</button>
+      <span class="meta">(If off, it simulates fast and only logs winners.)</span>
+    </div>
+
+    <div class="panel" style="margin-top:12px">
+      <div class="teamHead"><span>Bracket</span><span id="tournamentStatus" class="meta">Idle</span></div>
+      <div id="bracket" class="bracket" style="margin-top:10px"></div>
+    </div>
+  </section>
+
+  <!-- Pokedex Tab -->
+  <section id="tab-pokedex" class="panel hidden">
+    <div class="row">
+      <input id="dexSearch" placeholder="Search Pokémon (name or #)..." style="flex:1;min-width:220px" />
+      <button id="dexLoadBtn">Load Pokédex</button>
+      <span class="meta" id="dexStatus">Not loaded</span>
+    </div>
+
+    <div class="panel" style="margin-top:12px">
+      <div class="teamHead"><span>Pokédex Results</span><span class="meta">Tap a Pokémon to view stats/moves</span></div>
+      <div id="dexGrid" class="dexGrid" style="margin-top:10px"></div>
+    </div>
+  </section>
+
+  <!-- Leaderboard Tab -->
+  <section id="tab-leaderboard" class="panel hidden">
+    <div class="row">
+      <button id="leaderboardRefreshBtn">🔄 Refresh</button>
+      <button id="leaderboardResetBtn" class="mini">🧨 Reset</button>
+      <span class="meta">Stored locally on your phone/computer.</span>
+    </div>
+
+    <div class="panel" style="margin-top:12px">
+      <div class="teamHead"><span>Leaderboard</span></div>
+      <div id="leaderboardBody" style="margin-top:10px"></div>
+    </div>
+  </section>
 
 </main>
 
+<!-- Modal (Dex details + Tournament match watch) -->
 <div id="modal" class="modal hidden">
-  <div class="modalContent">
-    <button onclick="modal.classList.add('hidden')">Close</button>
-    <div id="modalBody"></div>
+  <div class="modalCard">
+    <div class="modalHead">
+      <strong id="modalTitle">Details</strong>
+      <button id="modalClose" class="mini">✕</button>
+    </div>
+    <div id="modalBody" class="modalBody"></div>
   </div>
 </div>
 
-<script>
-/* ================================
-   CORE UTILITIES
-================================ */
-const $ = id => document.getElementById(id);
-const log = (msg, speakIt=true)=>{
-  $("log").textContent += msg+"\\n";
-  $("log").scrollTop = $("log").scrollHeight;
-  if (speakIt) speak(msg);
-};
+<script src="./app.js?v=1" defer></script>
+<script src="./dex.js?v=1" defer></script>
 
-/* ================================
-   TEXT TO SPEECH – SPORTS ANNOUNCER
-================================ */
-let TTS=false, voice=null;
-function loadVoices(){
-  const list = speechSynthesis.getVoices();
-  $("voiceSelect").innerHTML="";
-  list.forEach((v,i)=>{
-    const o=document.createElement("option");
-    o.value=i; o.textContent=`${v.name} (${v.lang})`;
-    $("voiceSelect").appendChild(o);
-  });
-  voice=list[0];
-}
-speechSynthesis.onvoiceschanged=loadVoices;
-
-function speak(text){
-  if(!TTS||!voice)return;
-  const u=new SpeechSynthesisUtterance(text);
-  u.voice=voice;
-  u.rate=0.95;
-  u.pitch=1.05;
-  speechSynthesis.speak(u);
-}
-
-/* ================================
-   UI LOGIC
-================================ */
-$("ttsBtn").onclick=()=>{
-  TTS=!TTS;
-  $("ttsBtn").textContent=TTS?"🎙️ Announcer ON":"🎙️ Announcer OFF";
-};
-$("voiceSelect").onchange=e=>{
-  voice=speechSynthesis.getVoices()[e.target.value];
-};
-$("speedSelect").onchange=e=>TICK=+e.target.value;
-
-let TICK=700;
-
-/* ================================
-   FAKE BATTLE ENGINE (STABLE)
-================================ */
-function fakeTeam(name){
-  return { name, alive:6 };
-}
-function renderBalls(el, alive){
-  el.innerHTML="";
-  for(let i=0;i<6;i++){
-    const d=document.createElement("div");
-    d.className="ball"+(i>=alive?" fainted":"");
-    el.appendChild(d);
-  }
-}
-
-function battle(red, blue){
-  renderBalls($("redBalls"),6);
-  renderBalls($("blueBalls"),6);
-  let turn=1;
-  const interval=setInterval(()=>{
-    if(red.alive<=0||blue.alive<=0){
-      clearInterval(interval);
-      const win=red.alive>0?red.name:blue.name;
-      log(`🏁 ${win} wins the battle!`);
-      return;
-    }
-    log(`Turn ${turn}: The crowd roars!`);
-    if(Math.random()<0.5){ blue.alive--; }
-    else { red.alive--; }
-    renderBalls($("redBalls"),red.alive);
-    renderBalls($("blueBalls"),blue.alive);
-    turn++;
-  },TICK);
-}
-
-/* ================================
-   TOURNAMENT + BRACKET
-================================ */
-function runTournament(){
-  const size=+$("tournamentSize").value;
-  const teams=[];
-  for(let i=0;i<size;i++) teams.push({name:`Team ${i+1}`});
-  const bracket=$("bracket");
-  bracket.innerHTML="";
-  let round=1;
-  let current=teams;
-
-  while(current.length>1){
-    const col=document.createElement("div");
-    col.className="round";
-    col.innerHTML=`<strong>Round ${round}</strong>`;
-    const next=[];
-    for(let i=0;i<current.length;i+=2){
-      const a=current[i], b=current[i+1];
-      const win=Math.random()<0.5?a:b;
-      const div=document.createElement("div");
-      div.className="match";
-      div.innerHTML=`${a.name} vs ${b.name}<div class="winner">Winner: ${win.name}</div>`;
-      col.appendChild(div);
-      next.push(win);
-    }
-    bracket.appendChild(col);
-    current=next;
-    round++;
-  }
-  log(`🏆 TOURNAMENT CHAMPION: ${current[0].name}`);
-}
-
-/* ================================
-   BUTTONS
-================================ */
-$("simBtn").onclick=()=>{
-  $("log").textContent="";
-  const r={name:$("redName").value||"Red",alive:6};
-  const b={name:$("blueName").value||"Blue",alive:6};
-  $("redTitle").textContent=r.name;
-  $("blueTitle").textContent=b.name;
-  battle(r,b);
-};
-
-$("tournamentBtn").onclick=()=>{
-  $("log").textContent="";
-  runTournament();
-};
-</script>
 </body>
 </html>
