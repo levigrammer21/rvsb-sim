@@ -949,7 +949,10 @@ function newBattle(){
 }
 
 function active(b, team){ return team==="red" ? b.red[b.rIndex] : b.blue[b.bIndex]; }
-function livingCount(list){ return list.filter(m=>!m.fainted).length; }
+function aliveCount(list){
+  return list.filter(m => !m.fainted && m.curHP > 0).length;
+}
+
 
 function nextAliveIndex(list, start){
   for (let i=start;i<list.length;i++) if (!list[i].fainted) return i;
