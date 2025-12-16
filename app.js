@@ -1,21 +1,27 @@
-// Red vs Blue Battle Sim (MVP)
-// - Uses PokéAPI for stats/types/moves and caches responses locally.
-// - Simplified battle rules (fast + fun). Upgraded AI + switching.
-document.addEventListener("DOMContentLoaded", () => {
-  const s = document.getElementById("status");
-  if (s) s.textContent = "✅ app.js loaded";
-});
+// Red vs Blue Battle Sim (Stable Rewrite)
+// - PokéAPI caching
+// - Battle sim with secrets + AI switching
+// - Team renaming
+// - 6 Pokéball "alive" indicators
+// - Sports announcer narrator (TTS)
+
 const POKEAPI = "https://pokeapi.co/api/v2";
 const $ = (id) => document.getElementById(id);
 
-// --- Simple local cache (localStorage). Polite caching is recommended by PokéAPI docs. ---
-function cacheGet(key) {
-  try { return JSON.parse(localStorage.getItem(key) || "null"); } catch { return null; }
-}
-function cacheSet(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
-}
-async function cachedFetchJson(url, cacheKey, maxAgeMs = 1000*60*60*24*30) { // 30 days
+// -------- Crash-to-screen (so you never get silent failures again) --------
+window.addEventListener("error", (e) => {
+  try {
+    const s = $("status");
+    const msg = e?.error?.message || e?.message || "Unknown error";
+    if (s) s.textContent = `❌ JS Error: ${msg}`;
+  } catch {}
+});
+
+// -------- Local cache (localStorage) --------
+function cacheGet(key) { try { return JSON.parse(localStorage.getItem(key) || "null"); } catch { return null; } }
+function cacheSet(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} }
+
+async function cachedFetchJson(url, cacheKey, maxAgeMs = 1000*60*60*24*30) {
   const cached = cacheGet(cacheKey);
   if (cached && cached.t && (Date.now() - cached.t) < maxAgeMs) return cached.v;
 
@@ -25,114 +31,141 @@ async function cachedFetchJson(url, cacheKey, maxAgeMs = 1000*60*60*24*30) { // 
   cacheSet(cacheKey, { t: Date.now(), v: json });
   return json;
 }
-// --- Text-to-Speech (Narrator) ---
-let TTS_ENABLED = false;
+
+// -------- Utils --------
+function cap(s){ return s ? s[0].toUpperCase()+s.slice(1) : s; }
+function normName(s){ return (s||"").trim().toLowerCase().replace(/\s+/g,"-"); }
+function roll(pct){ return Math.random()*100 < pct; }
+function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
+function clamp(x,a,b){ return Math.max(a,Math.min(b,x)); }
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+// -------- Sports Announcer Narrator (TTS) --------
+let TTS_ENABLED = cacheGet("ttsEnabled") ?? false;
 let ttsQueue = [];
-let speaking = false;
+let ttsSpeaking = false;
 
-function speak(text) {
-  if (!TTS_ENABLED || !window.speechSynthesis) return;
-
-  ttsQueue.push(text);
-  if (!speaking) speakNext();
+function updateTtsButton(){
+  const btn = $("ttsBtn");
+  if (!btn) return;
+  btn.textContent = TTS_ENABLED ? "🔊 Announcer: ON" : "🔊 Announcer: OFF";
 }
 
-function speakNext() {
-  if (ttsQueue.length === 0) {
-    speaking = false;
-    return;
-  }
+function speak(text){
+  if (!TTS_ENABLED) return;
+  if (!("speechSynthesis" in window)) return;
 
-  speaking = true;
-  const utter = new SpeechSynthesisUtterance(ttsQueue.shift());
+  // Keep it “announcer” style: speak only meaningful lines, not every tiny marker.
+  const cleaned = (text || "")
+    .replace(/\s+/g, " ")
+    .trim();
 
-  // Voice tuning (good defaults for Android)
-  utter.rate = 1.0;
-  utter.pitch = 1.0;
-  utter.volume = 1.0;
+  if (!cleaned) return;
 
-  utter.onend = speakNext;
-  utter.onerror = speakNext;
-
-  speechSynthesis.speak(utter);
+  ttsQueue.push(cleaned);
+  if (!ttsSpeaking) speakNext();
 }
-// --- Flavor text ---
+
+function speakNext(){
+  if (ttsQueue.length === 0) { ttsSpeaking = false; return; }
+  ttsSpeaking = true;
+
+  const u = new SpeechSynthesisUtterance(ttsQueue.shift());
+  u.rate = 1.05;
+  u.pitch = 1.08;
+  u.volume = 1.0;
+
+  // Pick an English voice if available (best effort)
+  const voices = speechSynthesis.getVoices?.() || [];
+  const best = voices.find(v => /en-US/i.test(v.lang)) || voices.find(v => /en/i.test(v.lang));
+  if (best) u.voice = best;
+
+  u.onend = speakNext;
+  u.onerror = speakNext;
+  speechSynthesis.speak(u);
+}
+
+function stopSpeaking(){
+  try { speechSynthesis.cancel(); } catch {}
+  ttsQueue = [];
+  ttsSpeaking = false;
+}
+
+// -------- Flavor text (battle log) --------
 const FLAVOR = {
   turnStart: [
-    "The air crackles with tension…",
-    "Both trainers lock eyes.",
-    "The crowd leans in.",
-    "A hush falls over the arena.",
-    "You can feel something big coming…"
+    "The crowd leans in — here we go!",
+    "You can feel the momentum shifting!",
+    "Both sides look locked in!",
+    "The arena gets loud — this turn matters!",
+    "Something big is coming…"
   ],
   attackLead: [
-    "Without hesitation,",
-    "With a burst of speed,",
-    "Digging deep,",
-    "With zero fear,",
-    "Like it planned this all along,"
+    "fires off",
+    "launches",
+    "swings with",
+    "goes for",
+    "rushes in with"
   ],
   miss: [
-    "…but it whiffs completely!",
-    "…and hits nothing but air!",
-    "…and the target slips away!",
+    "…and misses! The crowd groans!",
+    "…and it whiffs! That was a big chance!",
     "…and it goes wide!",
-    "…and it totally fumbles it!"
+    "…and the target slips it!",
+    "…and that one doesn’t connect!"
   ],
   crit: [
-    "That one had MEAN intent!",
-    "OHHH that’s a clean crit!",
-    "Right on the weak spot!",
-    "That’s gotta hurt!",
+    "BANG — right on the button!",
+    "That’s a clean critical!",
+    "OHHH it found the weak spot!",
+    "That one HURT!",
     "Brutal precision!"
   ],
   super: [
-    "It hits like a truck!",
     "That matchup is nasty!",
+    "Super effective — HUGE damage!",
     "Perfect type advantage!",
     "That’s the pain button!",
-    "Super effective and LOUD!"
+    "It hits like a truck!"
   ],
   notVery: [
-    "It barely scratches…",
-    "That didn’t do much…",
-    "Kinda shrugs it off…",
-    "Not the best choice…",
-    "The target tanks it."
+    "Not much doing there…",
+    "That barely moved the needle…",
+    "The defense holds up!",
+    "Not very effective…",
+    "That one gets shrugged off."
   ],
   immune: [
-    "No effect at all!",
-    "It’s completely unfazed!",
-    "That does NOTHING!",
+    "NO EFFECT! Stuffed at the line!",
+    "Denied — completely immune!",
+    "Nothing happens!",
     "Total immunity!",
-    "Denied!"
+    "That does zero!"
   ],
   faint: [
-    "Down for the count!",
-    "It collapses!",
-    "That’s a wrap!",
-    "It can’t keep going!",
-    "Lights out!"
+    "DOWN FOR THE COUNT!",
+    "That’s a knockout!",
+    "It can’t continue!",
+    "Lights out!",
+    "And it hits the turf!"
   ],
   sendOut: [
-    "steps up with confidence!",
-    "charges in!",
+    "comes out fired up!",
     "hits the field ready!",
-    "looks fired up!",
-    "comes out swinging!"
+    "steps in with confidence!",
+    "charges in!",
+    "looks locked in!"
   ],
   switchOut: [
-    "falls back to regroup!",
-    "gets pulled out fast!",
+    "tags out to regroup!",
+    "backs off for a better matchup!",
     "retreats to safety!",
-    "tags out!",
-    "makes room for backup!"
+    "calls for backup!",
+    "makes the smart pivot!"
   ]
 };
 
-function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
-
-// --- Type chart (Gen 6+ style effectiveness) ---
+// -------- Type chart (Gen 6+ style effectiveness) --------
 const TYPE_MULT = (() => {
   const types = ["normal","fire","water","electric","grass","ice","fighting","poison","ground","flying","psychic","bug","rock","ghost","dragon","dark","steel","fairy"];
   const m = {};
@@ -141,7 +174,6 @@ const TYPE_MULT = (() => {
   const set = (atk, defs, val) => defs.forEach(d => m[atk][d] = val);
 
   set("normal", ["rock","steel"], 0.5); set("normal", ["ghost"], 0);
-
   set("fire", ["grass","ice","bug","steel"], 2); set("fire", ["fire","water","rock","dragon"], 0.5);
   set("water", ["fire","ground","rock"], 2); set("water", ["water","grass","dragon"], 0.5);
   set("electric", ["water","flying"], 2); set("electric", ["electric","grass","dragon"], 0.5); set("electric", ["ground"], 0);
@@ -169,27 +201,29 @@ function typeEffect(atkType, defTypes) {
   return mult;
 }
 
-// --- Teams ---
+// -------- App State --------
 const state = {
   red: [],
   blue: [],
   battle: null,
-  secretsFound: cacheGet("secretsFound") || {}, // {key: true}
+  secretsFound: cacheGet("secretsFound") || {},
+  teamNames: cacheGet("teamNames") || { red: "Red", blue: "Blue" },
 };
 
-function cap(s){ return s ? s[0].toUpperCase()+s.slice(1) : s; }
-function normName(s){ return (s||"").trim().toLowerCase().replace(/\s+/g,"-"); }
-
-function logLine(msg){
+// -------- Logger --------
+function logLine(msg, speakIt = false){
   const el = $("log");
   const t = new Date();
   const stamp = `${t.getHours().toString().padStart(2,"0")}:${t.getMinutes().toString().padStart(2,"0")}:${t.getSeconds().toString().padStart(2,"0")}`;
-  el.textContent += `[${stamp}] ${msg}\n`;
-  el.scrollTop = el.scrollHeight;
+  if (el) {
+    el.textContent += `[${stamp}] ${msg}\n`;
+    el.scrollTop = el.scrollHeight;
+  }
+  if (speakIt) speak(msg);
 }
 
-function setStatus(msg){ $("status").textContent = msg; }
-function setBattleStatus(msg){ $("battleStatus").textContent = msg; }
+function setStatus(msg){ const s = $("status"); if (s) s.textContent = msg; }
+function setBattleStatus(msg){ const s = $("battleStatus"); if (s) s.textContent = msg; }
 
 function spriteUrl(p){
   return p.sprites?.other?.["official-artwork"]?.front_default
@@ -210,7 +244,7 @@ function calcStats(baseStats, level){
 
 async function pickMoves(pokemonJson){
   const out = [];
-  const moveEntries = pokemonJson.moves?.slice(0, 60) || [];
+  const moveEntries = pokemonJson.moves?.slice(0, 80) || [];
   for (const entry of moveEntries) {
     if (out.length >= 4) break;
     const murl = entry.move.url;
@@ -218,6 +252,7 @@ async function pickMoves(pokemonJson){
     const m = await cachedFetchJson(murl, `move:${mname}`, 1000*60*60*24*180);
     if (!m || m.power == null) continue;
     if (m.damage_class?.name !== "physical" && m.damage_class?.name !== "special") continue;
+
     out.push({
       name: mname,
       type: m.type?.name || "normal",
@@ -225,8 +260,10 @@ async function pickMoves(pokemonJson){
       acc: m.accuracy ?? 100,
       kind: m.damage_class.name
     });
-    await new Promise(r => setTimeout(r, 60));
+
+    await new Promise(r => setTimeout(r, 40));
   }
+
   if (out.length === 0) out.push({name:"tackle", type:"normal", power:40, acc:100, kind:"physical"});
   while (out.length < 4) out.push(out[out.length-1]);
   return out;
@@ -251,10 +288,43 @@ async function loadPokemon(name, level){
   };
 }
 
-// --- UI render ---
+// -------- UI: Pokéballs --------
+function ensureBalls(elId){
+  const el = $(elId);
+  if (!el) return;
+  if (el.children.length === 6) return;
+  el.innerHTML = "";
+  for (let i=0;i<6;i++){
+    const d = document.createElement("div");
+    d.className = "ball empty";
+    el.appendChild(d);
+  }
+}
+
+function setBalls(elId, total, alive){
+  ensureBalls(elId);
+  const el = $(elId);
+  if (!el) return;
+  const nodes = Array.from(el.children);
+  for (let i=0;i<6;i++){
+    const node = nodes[i];
+    const slotExists = i < total;
+    if (!slotExists) {
+      node.className = "ball empty";
+      continue;
+    }
+    const isAlive = i < alive;
+    node.className = isAlive ? "ball" : "ball fainted";
+  }
+}
+
+// -------- UI: Team lists --------
 function renderTeams(){
   const red = $("redList"), blue = $("blueList");
+  if (!red || !blue) return;
+
   red.innerHTML = ""; blue.innerHTML = "";
+
   for (const [team, el] of [["red", red], ["blue", blue]]) {
     for (let i=0;i<state[team].length;i++){
       const mon = state[team][i];
@@ -277,63 +347,37 @@ function renderTeams(){
       el.appendChild(li);
     }
   }
+
   $("redPill").textContent = `${state.red.length} Pokémon`;
   $("bluePill").textContent = `${state.blue.length} Pokémon`;
-  $("redCount").textContent = `${state.red.length}/6`;
-  $("blueCount").textContent = `${state.blue.length}/6`;
+
+  // builder view = alive==total
+  $("redCount").textContent = `${state.red.length}/${state.red.length}`;
+  $("blueCount").textContent = `${state.blue.length}/${state.blue.length}`;
+
+  setBalls("redBalls", state.red.length, state.red.length);
+  setBalls("blueBalls", state.blue.length, state.blue.length);
 
   const ready = state.red.length > 0 && state.blue.length > 0;
   $("simBtn").disabled = !ready;
   $("stepBtn").disabled = true;
 }
 
-document.addEventListener("click", (e)=>{
-  const btn = e.target.closest("button");
-  if (!btn) return;
-  const act = btn.dataset.act;
-  if (!act) return;
-  const team = btn.dataset.team;
-  const i = parseInt(btn.dataset.i,10);
-  if (!Number.isFinite(i)) return;
-
-  if (act==="del") state[team].splice(i,1);
-  if (act==="up" && i>0) [state[team][i-1], state[team][i]] = [state[team][i], state[team][i-1]];
-  if (act==="down" && i<state[team].length-1) [state[team][i+1], state[team][i]] = [state[team][i], state[team][i+1]];
-  renderTeams();
-});
-
-// --- Battle sim (simplified, but fun) ---
+// -------- Battle Core --------
 function cloneMon(mon){
   return {
     ...mon,
     curHP: mon.stats.hp,
     fainted:false,
-    boosts:{atk:0,def:0,spa:0,spd:0,spe:0},
-    secret: null
+    secret: null,
+    _hitsInRow: 0,
+    _shield: 1,
+    _powerBoost: 1,
+    _critBoost: false
   };
 }
 
-function roll(pct){ return Math.random()*100 < pct; }
-function randInt(min,max){ return Math.floor(Math.random()*(max-min+1))+min; }
-function clamp(x,a,b){ return Math.max(a,Math.min(b,x)); }
-
-function stab(moveType, userTypes){ return userTypes.includes(moveType) ? 1.5 : 1; }
-
-function damageFormula(attacker, defender, move){
-  const level = attacker.level;
-  const A = (move.kind==="physical") ? attacker.stats.atk : attacker.stats.spa;
-  const D = (move.kind==="physical") ? defender.stats.def : defender.stats.spd;
-
-  const base = Math.floor((((2*level/5)+2) * move.power * (A/D)) / 50) + 2;
-  const eff = typeEffect(move.type, defender.types);
-  const s = stab(move.type, attacker.types);
-  const crit = roll(6.25) ? 1.5 : 1;
-  const random = randInt(85,100)/100;
-
-  return { dmg: Math.max(1, Math.floor(base * eff * s * crit * random)), eff, crit: (crit>1) };
-}
-
-// --- Secret abilities ---
+// Secrets (discoverable)
 const SECRET_POOL = [
   {
     key:"last-stand",
@@ -375,13 +419,11 @@ function maybeAssignSecret(mon){
   if (!roll(20)) return;
   mon.secret = SECRET_POOL[randInt(0, SECRET_POOL.length-1)];
 }
-
 function revealSecret(secret){
   if (!secret) return "???";
   if (state.secretsFound[secret.key]) return secret.name;
   return "???";
 }
-
 function markSecretFound(secret){
   if (!secret) return;
   if (!state.secretsFound[secret.key]) {
@@ -389,10 +431,10 @@ function markSecretFound(secret){
     cacheSet("secretsFound", state.secretsFound);
     $("secretBox").style.display = "block";
     $("secretBox").textContent = `Secret discovered: ${secret.name} — ${secret.hint}`;
+    speak(`Secret discovered: ${secret.name}.`);
   }
 }
 
-// Battle object
 function newBattle(){
   const b = {
     red: state.red.map(cloneMon),
@@ -400,93 +442,98 @@ function newBattle(){
     rIndex: 0,
     bIndex: 0,
     over: false,
-    turn: 0
+    turn: 0,
   };
   b.red.forEach(maybeAssignSecret);
   b.blue.forEach(maybeAssignSecret);
   return b;
 }
-
 function active(b, team){ return team==="red" ? b.red[b.rIndex] : b.blue[b.bIndex]; }
 function nextAliveIndex(list, start){
   for (let i=start;i<list.length;i++) if (!list[i].fainted) return i;
   for (let i=0;i<start;i++) if (!list[i].fainted) return i;
   return -1;
 }
-
-// -------- Better AI + Switching (works with your data model) --------
+function aliveCount(list){ return list.filter(m=>!m.fainted && m.curHP > 0).length; }
 function hpPct(mon){ return mon.curHP / Math.max(1, mon.stats.hp); }
+function stab(moveType, userTypes){ return userTypes.includes(moveType) ? 1.5 : 1; }
 
+function damageFormula(attacker, defender, move){
+  const level = attacker.level;
+  const A = (move.kind==="physical") ? attacker.stats.atk : attacker.stats.spa;
+  const D = (move.kind==="physical") ? defender.stats.def : defender.stats.spd;
+
+  const base = Math.floor((((2*level/5)+2) * move.power * (A/Math.max(1,D))) / 50) + 2;
+  const eff = typeEffect(move.type, defender.types);
+  const s = stab(move.type, attacker.types);
+  const crit = roll(6.25) ? 1.5 : 1;
+  const random = randInt(85,100)/100;
+
+  return { dmg: Math.max(1, Math.floor(base * eff * s * crit * random)), eff, crit:(crit>1) };
+}
+
+// AI (expected damage for switching decisions)
 function expectedDamageSimple(attacker, defender, mv){
-  // deterministic-ish "expected" damage using your damage formula ingredients (no crit/random)
   const level = attacker.level;
   const A = (mv.kind==="physical") ? attacker.stats.atk : attacker.stats.spa;
   const D = (mv.kind==="physical") ? defender.stats.def : defender.stats.spd;
 
   const power = mv.power || 40;
-  const base = (((2*level/5)+2) * power * (A/Math.max(1, D))) / 50 + 2;
+  const base = (((2*level/5)+2) * power * (A/Math.max(1,D))) / 50 + 2;
 
   const eff = typeEffect(mv.type, defender.types);
   const s = stab(mv.type, attacker.types);
-  const acc = (mv.acc ?? 100) / 100;
+  const acc = (mv.acc ?? 100)/100;
 
-  // expected roll average ~0.925, crit EV ~1.03125
   const rollEV = 0.925;
   const critEV = 1.03125;
-
   return base * eff * s * acc * rollEV * critEV;
 }
-
 function bestMove(attacker, defender){
   if (!attacker.moves?.length) return null;
   let best = attacker.moves[0];
   let bestScore = -Infinity;
   for (const mv of attacker.moves) {
-    const score = expectedDamageSimple(attacker, defender, mv) + Math.random() * 2; // tiny variety
+    const score = expectedDamageSimple(attacker, defender, mv) + Math.random()*2;
     if (score > bestScore) { bestScore = score; best = mv; }
   }
   return best;
 }
-
 function matchupScore(attacker, defender){
   const my = bestMove(attacker, defender);
   const their = bestMove(defender, attacker);
   const out = my ? expectedDamageSimple(attacker, defender, my) : 0;
   const inc = their ? expectedDamageSimple(defender, attacker, their) : 0;
   const speedEdge = attacker.stats.spe >= defender.stats.spe ? 1.1 : 0.95;
-  return (out * speedEdge) - (inc * 0.9);
+  return (out*speedEdge) - (inc*0.9);
 }
-
 function chooseBestSwitch(list, activeIdx, enemyActive){
   let bestIdx = null;
   let best = -Infinity;
   for (let i=0;i<list.length;i++){
-    if (i === activeIdx) continue;
+    if (i===activeIdx) continue;
     const cand = list[i];
-    if (!cand || cand.fainted || cand.curHP <= 0) continue;
+    if (!cand || cand.fainted || cand.curHP<=0) continue;
 
     const score = matchupScore(cand, enemyActive);
-
-    // don't switch into obvious death
     const their = bestMove(enemyActive, cand);
     const danger = their ? expectedDamageSimple(enemyActive, cand, their) : 0;
-    const finalScore = score - danger * 0.5;
+    const finalScore = score - danger*0.5;
 
     if (finalScore > best) { best = finalScore; bestIdx = i; }
   }
   return bestIdx;
 }
-
 function decideAIAction({ list, activeIndex, enemyActive }){
-  const activeMon = list[activeIndex];
-  if (!activeMon || activeMon.fainted || activeMon.curHP <= 0) {
+  const me = list[activeIndex];
+  if (!me || me.fainted || me.curHP<=0) {
     const forced = chooseBestSwitch(list, activeIndex, enemyActive);
-    return forced !== null ? { type:"switch", to: forced } : { type:"struggle" };
+    return forced !== null ? { type:"switch", to:forced } : { type:"struggle" };
   }
 
-  const scoreNow = matchupScore(activeMon, enemyActive);
-  const low = hpPct(activeMon) <= 0.35;
-  const veryLow = hpPct(activeMon) <= 0.20;
+  const scoreNow = matchupScore(me, enemyActive);
+  const low = hpPct(me) <= 0.35;
+  const veryLow = hpPct(me) <= 0.20;
 
   const bestIdx = chooseBestSwitch(list, activeIndex, enemyActive);
   if (bestIdx !== null) {
@@ -497,14 +544,27 @@ function decideAIAction({ list, activeIndex, enemyActive }){
       (veryLow && swScore > scoreNow - 1);
 
     const bias = should ? 0.85 : 0.10;
-    if (Math.random() < bias) return { type:"switch", to: bestIdx };
+    if (Math.random() < bias) return { type:"switch", to:bestIdx };
   }
 
-  return { type:"move", move: bestMove(activeMon, enemyActive) };
+  return { type:"move", move: bestMove(me, enemyActive) };
 }
 
+// HUD
 function updateHud(){
-  if (!state.battle) return;
+  if (!state.battle) {
+    // builder view
+    $("redActiveName").textContent = "";
+    $("blueActiveName").textContent = "";
+    $("redHpText").textContent = "HP: —";
+    $("blueHpText").textContent = "HP: —";
+    $("redHpFill").style.width = "0%";
+    $("blueHpFill").style.width = "0%";
+    $("redTypes").textContent = "";
+    $("blueTypes").textContent = "";
+    return;
+  }
+
   const b = state.battle;
   const r = active(b,"red");
   const u = active(b,"blue");
@@ -522,10 +582,19 @@ function updateHud(){
 
   $("redTypes").textContent = r ? r.types.map(cap).join(" / ") : "";
   $("blueTypes").textContent = u ? u.types.map(cap).join(" / ") : "";
+
+  const rAlive = aliveCount(b.red);
+  const bAlive = aliveCount(b.blue);
+  $("redCount").textContent = `${rAlive}/${b.red.length}`;
+  $("blueCount").textContent = `${bAlive}/${b.blue.length}`;
+
+  setBalls("redBalls", b.red.length, rAlive);
+  setBalls("blueBalls", b.blue.length, bAlive);
 }
 
 function shake(team){
   const el = team==="red" ? $("hudRed") : $("hudBlue");
+  if (!el) return;
   el.classList.remove("shake");
   void el.offsetWidth;
   el.classList.add("shake");
@@ -534,9 +603,12 @@ function shake(team){
 function doAttack(atkTeam, atkMon, mv, defTeam, defMon){
   if (atkMon.fainted || defMon.fainted) return;
 
+  const atkName = state.teamNames[atkTeam] || atkTeam.toUpperCase();
+  const defName = state.teamNames[defTeam] || defTeam.toUpperCase();
+
   // Accuracy
   if (!roll(mv.acc ?? 100)) {
-    logLine(`${atkTeam.toUpperCase()} ${atkMon.display} used ${cap(mv.name.replace(/-/g," "))}${pick(FLAVOR.miss)}`);
+    logLine(`${atkName} ${atkMon.display} used ${cap(mv.name.replace(/-/g," "))}${pick(FLAVOR.miss)}`, true);
     atkMon._hitsInRow = 0;
     return;
   }
@@ -545,16 +617,16 @@ function doAttack(atkTeam, atkMon, mv, defTeam, defMon){
   const ctx = { attacker: atkMon, defender: defMon, move: mv };
   if (defMon.secret && defMon.secret.when(ctx)) {
     const msg = defMon.secret.apply(ctx);
-    logLine(`${defTeam.toUpperCase()} ${defMon.display}'s secret (${revealSecret(defMon.secret)}) stirs… ${msg}`);
+    logLine(`${defName} ${defMon.display}'s secret (${revealSecret(defMon.secret)}) stirs… ${msg}`, true);
     markSecretFound(defMon.secret);
   }
   if (atkMon.secret && atkMon.secret.when(ctx)) {
     const msg = atkMon.secret.apply(ctx);
-    logLine(`${atkTeam.toUpperCase()} ${atkMon.display}'s secret (${revealSecret(atkMon.secret)}) awakens… ${msg}`);
+    logLine(`${atkName} ${atkMon.display}'s secret (${revealSecret(atkMon.secret)}) awakens… ${msg}`, true);
     markSecretFound(atkMon.secret);
   }
 
-  // Damage
+  // Damage modifiers
   const powBoost = atkMon._powerBoost || 1;
   const critBoost = atkMon._critBoost || false;
   const shield = defMon._shield || 1;
@@ -563,17 +635,19 @@ function doAttack(atkTeam, atkMon, mv, defTeam, defMon){
   const d = damageFormula(atkMon, defMon, mv2);
 
   let dmg = Math.floor(d.dmg * (1/shield));
-  defMon._shield = 1; // consume shield
+  defMon._shield = 1;
   if (critBoost) { dmg = Math.floor(dmg*1.5); atkMon._critBoost=false; }
 
   defMon.curHP = Math.max(0, defMon.curHP - dmg);
   atkMon._hitsInRow = (atkMon._hitsInRow||0) + 1;
 
-  logLine(`${atkTeam.toUpperCase()} ${atkMon.display} ${pick(FLAVOR.attackLead)} used ${cap(mv.name.replace(/-/g," "))}! (-${dmg} HP)`);
-  if (d.crit) logLine(`  ➤ Critical hit! ${pick(FLAVOR.crit)}`);
-if (d.eff >= 2) logLine(`  ➤ It's super effective! ${pick(FLAVOR.super)}`);
-if (d.eff > 0 && d.eff < 1) logLine(`  ➤ It's not very effective… ${pick(FLAVOR.notVery)}`);
-if (d.eff === 0) logLine(`  ➤ It doesn't affect the target… ${pick(FLAVOR.immune)}`);
+  logLine(`${atkName} ${atkMon.display} ${pick(FLAVOR.attackLead)} ${cap(mv.name.replace(/-/g," "))}! (-${dmg} HP)`, true);
+
+  if (d.crit) logLine(`  ➤ Critical hit! ${pick(FLAVOR.crit)}`, true);
+  if (d.eff >= 2) logLine(`  ➤ Super effective! ${pick(FLAVOR.super)}`, true);
+  if (d.eff > 0 && d.eff < 1) logLine(`  ➤ Not very effective… ${pick(FLAVOR.notVery)}`, false);
+  if (d.eff === 0) logLine(`  ➤ No effect… ${pick(FLAVOR.immune)}`, true);
+
   shake(defTeam);
   updateHud();
 }
@@ -583,8 +657,11 @@ function handleFaint(defTeam, atkTeam){
   const defMon = active(b, defTeam);
   if (!defMon || defMon.curHP > 0) return false;
 
+  const defName = state.teamNames[defTeam] || defTeam.toUpperCase();
+  const atkName = state.teamNames[atkTeam] || atkTeam.toUpperCase();
+
   defMon.fainted = true;
-  logLine(`${defTeam.toUpperCase()} ${defMon.display} fainted! ${pick(FLAVOR.faint)}`);
+  logLine(`${defName} ${defMon.display} fainted! ${pick(FLAVOR.faint)}`, true);
 
   const list = defTeam==="red" ? b.red : b.blue;
   const idx = defTeam==="red" ? b.rIndex : b.bIndex;
@@ -592,15 +669,15 @@ function handleFaint(defTeam, atkTeam){
 
   if (next === -1) {
     b.over = true;
-    logLine(`🏁 ${atkTeam.toUpperCase()} wins!`);
-    setBattleStatus(`${atkTeam.toUpperCase()} wins!`);
+    logLine(`🏁 ${atkName} wins the match!`, true);
+    setBattleStatus(`${atkName} wins!`);
     $("stepBtn").disabled = true;
     return true;
   } else {
     if (defTeam==="red") b.rIndex = next;
     else b.bIndex = next;
     const newActive = active(b, defTeam);
-    logLine(`${defTeam.toUpperCase()} sends out ${newActive.display} — it ${pick(FLAVOR.sendOut)}`);
+    logLine(`${defName} sends out ${newActive.display} — it ${pick(FLAVOR.sendOut)}`, true);
     updateHud();
     return false;
   }
@@ -612,178 +689,227 @@ function stepBattle(){
 
   b.turn++;
   setBattleStatus(`Turn ${b.turn}`);
-  if (b.turn === 1 || roll(35)) logLine(`✨ ${pick(FLAVOR.turnStart)}`);
+
+  if (b.turn === 1 || roll(35)) {
+    logLine(`✨ ${pick(FLAVOR.turnStart)}`, true);
+  }
 
   const r0 = active(b,"red");
   const u0 = active(b,"blue");
   if (!r0 || !u0) return;
 
-  // Decide actions (move or switch)
   const redAction = decideAIAction({ list: b.red, activeIndex: b.rIndex, enemyActive: u0 });
   const blueAction = decideAIAction({ list: b.blue, activeIndex: b.bIndex, enemyActive: r0 });
 
-  // Switches happen first
+  // Switches first
   if (redAction.type === "switch") {
     b.rIndex = redAction.to;
-    logLine(`RED switched to ${active(b,"red").display}!`);
+    const rNow = active(b,"red");
+    logLine(`${state.teamNames.red} ${pick(FLAVOR.switchOut)} ➜ ${rNow.display}!`, true);
   }
   if (blueAction.type === "switch") {
     b.bIndex = blueAction.to;
-    logLine(`BLUE switched to ${active(b,"blue").display}!`);
+    const bNow = active(b,"blue");
+    logLine(`${state.teamNames.blue} ${pick(FLAVOR.switchOut)} ➜ ${bNow.display}!`, true);
   }
 
   updateHud();
 
-  // If both switched, end turn (no damage this step)
   if (redAction.type === "switch" && blueAction.type === "switch") return;
 
   const r = active(b,"red");
   const u = active(b,"blue");
   if (!r || !u) return;
 
-  // Moves (if they chose move)
-  const rMove = (redAction.type === "move" && redAction.move) ? redAction.move : bestMove(r, u) || r.moves[0];
-  const uMove = (blueAction.type === "move" && blueAction.move) ? blueAction.move : bestMove(u, r) || u.moves[0];
+  const rMove = (redAction.type === "move" && redAction.move) ? redAction.move : bestMove(r,u) || r.moves[0];
+  const uMove = (blueAction.type === "move" && blueAction.move) ? blueAction.move : bestMove(u,r) || u.moves[0];
 
-  // If one switched and the other attacks: attacker hits the NEW active mon
+  // If one switched and the other attacks
   if (redAction.type !== "switch" && blueAction.type === "switch") {
     doAttack("red", r, rMove, "blue", u);
-    if (handleFaint("blue", "red")) return;
+    if (handleFaint("blue","red")) return;
     updateHud();
     return;
   }
   if (redAction.type === "switch" && blueAction.type !== "switch") {
     doAttack("blue", u, uMove, "red", r);
-    if (handleFaint("red", "blue")) return;
+    if (handleFaint("red","blue")) return;
     updateHud();
     return;
   }
 
-  // Both attack: order by speed (random tiebreak)
+  // Both attack: speed order
   const rFirst = (r.stats.spe > u.stats.spe) || (r.stats.spe === u.stats.spe && roll(50));
   if (rFirst) {
     doAttack("red", r, rMove, "blue", u);
-    if (handleFaint("blue", "red")) return;
-    // If blue fainted and got replaced, refresh u
+    if (handleFaint("blue","red")) return;
+
     const u2 = active(b,"blue");
     if (u2 && !u2.fainted) {
       doAttack("blue", u2, uMove, "red", active(b,"red"));
-      if (handleFaint("red", "blue")) return;
+      if (handleFaint("red","blue")) return;
     }
   } else {
     doAttack("blue", u, uMove, "red", r);
-    if (handleFaint("red", "blue")) return;
+    if (handleFaint("red","blue")) return;
+
     const r2 = active(b,"red");
     if (r2 && !r2.fainted) {
       doAttack("red", r2, rMove, "blue", active(b,"blue"));
-      if (handleFaint("blue", "red")) return;
+      if (handleFaint("blue","red")) return;
     }
   }
 
   updateHud();
 }
 
-// --- Buttons ---
-$("addBtn").addEventListener("click", async ()=>{
-  const name = $("searchName").value;
-  const team = $("teamPick").value;
-  const level = parseInt($("levelPick").value,10);
+// -------- Events / Init --------
+document.addEventListener("click", (e)=>{
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  const act = btn.dataset.act;
+  if (!act) return;
+  const team = btn.dataset.team;
+  const i = parseInt(btn.dataset.i,10);
+  if (!Number.isFinite(i)) return;
 
-  if (!name) return;
-  if (state[team].length >= 6) { setStatus("That team already has 6."); return; }
-
-  setStatus("Loading…");
-  try {
-    const mon = await loadPokemon(name, level);
-    state[team].push(mon);
-    renderTeams();
-    logLine(`Added ${mon.display} to ${team.toUpperCase()} (Lv ${level}).`);
-    setStatus("Ready");
-    $("searchName").value = "";
-  } catch (e) {
-    console.error(e);
-    setStatus("Couldn’t find that Pokémon. Try a different spelling.");
-  }
-});
-
-$("randomBtn").addEventListener("click", async ()=>{
-  const randId = () => randInt(1, 1010);
-  state.red = []; state.blue = [];
-  renderTeams();
-  $("log").textContent = "";
-  setStatus("Loading random teams…");
-  try {
-    for (let i=0;i<6;i++){
-      const level = 50;
-      const rid = randId(), bid = randId();
-      const r = await cachedFetchJson(`${POKEAPI}/pokemon/${rid}`, `pokemonid:${rid}`, 1000*60*60*24*180);
-      const b = await cachedFetchJson(`${POKEAPI}/pokemon/${bid}`, `pokemonid:${bid}`, 1000*60*60*24*180);
-      state.red.push(await loadPokemon(r.name, level));
-      state.blue.push(await loadPokemon(b.name, level));
-      renderTeams();
-      await new Promise(r=>setTimeout(r, 60));
-    }
-    setStatus("Ready");
-    logLine("Random teams generated.");
-  } catch (e) {
-    console.error(e);
-    setStatus("Random team failed (network?). Try again.");
-  }
-});
-
-$("clearBtn").addEventListener("click", ()=>{
-  state.red=[]; state.blue=[];
-  state.battle=null;
-  $("log").textContent="";
-  $("secretBox").style.display="none";
-  setBattleStatus("No battle yet");
+  if (act==="del") state[team].splice(i,1);
+  if (act==="up" && i>0) [state[team][i-1], state[team][i]] = [state[team][i], state[team][i-1]];
+  if (act==="down" && i<state[team].length-1) [state[team][i+1], state[team][i]] = [state[team][i], state[team][i+1]];
   renderTeams();
 });
 
-$("simBtn").addEventListener("click", ()=>{
-  $("log").textContent = "";
-  $("secretBox").style.display="none";
-  state.battle = newBattle();
-  setBattleStatus("Battle started");
-  logLine("⚔️ Battle start!");
-  updateHud();
-  $("stepBtn").disabled = false;
+document.addEventListener("DOMContentLoaded", async () => {
+  // Load saved team names
+  $("redName").value = state.teamNames.red || "Red";
+  $("blueName").value = state.teamNames.blue || "Blue";
+  updateTtsButton();
 
-  let safety = 0;
-  const tick = () => {
-    if (!state.battle || state.battle.over) return;
-    stepBattle();
-    safety++;
-let safety = 0;
-  const TICK_MS = 350; // slower battle speed (change this number)
-
-  const tick = () => {
-    if (!state.battle || state.battle.over) return;
-    stepBattle();
-    safety++;
-    if (safety < 500 && !state.battle.over) setTimeout(tick, TICK_MS);
-  };
-  tick();
-  };
-  tick();
-});
-
-$("stepBtn").addEventListener("click", ()=>{
-  if (!state.battle) return;
-  stepBattle();
-});
-
-$("installHintBtn").addEventListener("click", ()=>{
-  alert("On Android (Chrome): open this app URL ➜ tap ⋮ menu ➜ 'Add to Home screen' / 'Install app'.\n\nPWAs install best when served over HTTPS (not file://).");
-});
-
-// --- Service worker registration ---
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", async () => {
-    try { await navigator.serviceWorker.register("./sw.js"); } catch {}
+  $("redName").addEventListener("input", () => {
+    state.teamNames.red = $("redName").value.trim() || "Red";
+    cacheSet("teamNames", state.teamNames);
+    $("teamPick").querySelector('option[value="red"]').textContent = state.teamNames.red;
   });
-}
+  $("blueName").addEventListener("input", () => {
+    state.teamNames.blue = $("blueName").value.trim() || "Blue";
+    cacheSet("teamNames", state.teamNames);
+    $("teamPick").querySelector('option[value="blue"]').textContent = state.teamNames.blue;
+  });
 
-// Initial render
-renderTeams();
-logLine("Ready. Add Pokémon to Red and Blue, then Sim Battle.");
+  // Reflect names into team picker labels
+  $("teamPick").querySelector('option[value="red"]').textContent = state.teamNames.red;
+  $("teamPick").querySelector('option[value="blue"]').textContent = state.teamNames.blue;
+
+  $("ttsBtn").addEventListener("click", () => {
+    TTS_ENABLED = !TTS_ENABLED;
+    cacheSet("ttsEnabled", TTS_ENABLED);
+    updateTtsButton();
+    if (!TTS_ENABLED) stopSpeaking();
+    else speak("Announcer is on. Let's battle!");
+  });
+
+  $("addBtn").addEventListener("click", async ()=>{
+    const name = $("searchName").value;
+    const team = $("teamPick").value === state.teamNames.red ? "red" : ($("teamPick").value === state.teamNames.blue ? "blue" : $("teamPick").value);
+    // In case the select option text was changed, we still keep value="red"/"blue"
+    const teamKey = $("teamPick").value === "red" || $("teamPick").value === "blue" ? $("teamPick").value : (team === "red" ? "red" : "blue");
+    const level = parseInt($("levelPick").value,10);
+
+    if (!name) return;
+    if (state[teamKey].length >= 6) { setStatus("That team already has 6."); return; }
+
+    setStatus("Loading…");
+    try {
+      const mon = await loadPokemon(name, level);
+      state[teamKey].push(mon);
+      renderTeams();
+      logLine(`Added ${mon.display} to ${state.teamNames[teamKey]} (Lv ${level}).`, false);
+      setStatus("Ready");
+      $("searchName").value = "";
+    } catch (e) {
+      console.error(e);
+      setStatus("Couldn’t find that Pokémon. Try a different spelling.");
+    }
+  });
+
+  $("randomBtn").addEventListener("click", async ()=>{
+    const randId = () => randInt(1, 1010);
+    state.red = []; state.blue = [];
+    renderTeams();
+    $("log").textContent = "";
+    setStatus("Loading random teams…");
+    try {
+      for (let i=0;i<6;i++){
+        const level = 50;
+        const rid = randId(), bid = randId();
+        const r = await cachedFetchJson(`${POKEAPI}/pokemon/${rid}`, `pokemonid:${rid}`, 1000*60*60*24*180);
+        const b = await cachedFetchJson(`${POKEAPI}/pokemon/${bid}`, `pokemonid:${bid}`, 1000*60*60*24*180);
+        state.red.push(await loadPokemon(r.name, level));
+        state.blue.push(await loadPokemon(b.name, level));
+        renderTeams();
+        await new Promise(r=>setTimeout(r, 40));
+      }
+      setStatus("Ready");
+      logLine("Random teams generated.", true);
+    } catch (e) {
+      console.error(e);
+      setStatus("Random team failed (network?). Try again.");
+    }
+  });
+
+  $("clearBtn").addEventListener("click", ()=>{
+    state.red=[]; state.blue=[];
+    state.battle=null;
+    $("log").textContent="";
+    $("secretBox").style.display="none";
+    setBattleStatus("No battle yet");
+    renderTeams();
+    updateHud();
+    stopSpeaking();
+  });
+
+  $("simBtn").addEventListener("click", ()=>{
+    $("log").textContent = "";
+    $("secretBox").style.display="none";
+    stopSpeaking();
+
+    state.battle = newBattle();
+    setBattleStatus("Battle started");
+    logLine(`⚔️ ${state.teamNames.red} vs ${state.teamNames.blue} — FIGHT!`, true);
+
+    updateHud();
+    $("stepBtn").disabled = false;
+
+    // Auto sim speed
+    const TICK_MS = 350;
+    let safety = 0;
+
+    const tick = () => {
+      if (!state.battle || state.battle.over) return;
+      stepBattle();
+      safety++;
+      if (safety < 700 && !state.battle.over) setTimeout(tick, TICK_MS);
+    };
+    tick();
+  });
+
+  $("stepBtn").addEventListener("click", ()=>{
+    if (!state.battle) return;
+    stepBattle();
+  });
+
+  $("installHintBtn").addEventListener("click", ()=>{
+    alert("On Android (Chrome): open this app URL ➜ tap ⋮ menu ➜ 'Install app' / 'Add to Home screen'.");
+  });
+
+  // Service worker registration
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", async () => {
+      try { await navigator.serviceWorker.register("./sw.js"); } catch {}
+    });
+  }
+
+  renderTeams();
+  logLine("Ready. Add Pokémon to Red and Blue, then Sim Battle.", false);
+  setStatus("Ready");
+});
