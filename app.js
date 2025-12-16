@@ -646,7 +646,7 @@ $("simBtn").addEventListener("click", ()=>{
     if (!state.battle || state.battle.over) return;
     stepBattle();
     safety++;
-    if (safety < 500 && !state.battle.over) setTimeout(tick, 350);
+    if (safety < 500 && !state.battle.over) ctx.attacker._hit500);
   };
   tick();
 });
