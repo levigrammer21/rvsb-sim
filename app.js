@@ -23,6 +23,82 @@ async function cachedFetchJson(url, cacheKey, maxAgeMs = 1000*60*60*24*30) { // 
   return json;
 }
 
+// --- Flavor text ---
+const FLAVOR = {
+  turnStart: [
+    "The air crackles with tension…",
+    "Both trainers lock eyes.",
+    "The crowd leans in.",
+    "A hush falls over the arena.",
+    "You can feel something big coming…"
+  ],
+  attackLead: [
+    "Without hesitation,",
+    "With a burst of speed,",
+    "Digging deep,",
+    "With zero fear,",
+    "Like it planned this all along,"
+  ],
+  miss: [
+    "…but it whiffs completely!",
+    "…and hits nothing but air!",
+    "…and the target slips away!",
+    "…and it goes wide!",
+    "…and it totally fumbles it!"
+  ],
+  crit: [
+    "That one had MEAN intent!",
+    "OHHH that’s a clean crit!",
+    "Right on the weak spot!",
+    "That’s gotta hurt!",
+    "Brutal precision!"
+  ],
+  super: [
+    "It hits like a truck!",
+    "That matchup is nasty!",
+    "Perfect type advantage!",
+    "That’s the pain button!",
+    "Super effective and LOUD!"
+  ],
+  notVery: [
+    "It barely scratches…",
+    "That didn’t do much…",
+    "Kinda shrugs it off…",
+    "Not the best choice…",
+    "The target tanks it."
+  ],
+  immune: [
+    "No effect at all!",
+    "It’s completely unfazed!",
+    "That does NOTHING!",
+    "Total immunity!",
+    "Denied!"
+  ],
+  faint: [
+    "Down for the count!",
+    "It collapses!",
+    "That’s a wrap!",
+    "It can’t keep going!",
+    "Lights out!"
+  ],
+  sendOut: [
+    "steps up with confidence!",
+    "charges in!",
+    "hits the field ready!",
+    "looks fired up!",
+    "comes out swinging!"
+  ],
+  switchOut: [
+    "falls back to regroup!",
+    "gets pulled out fast!",
+    "retreats to safety!",
+    "tags out!",
+    "makes room for backup!"
+  ]
+};
+
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
 // --- Type chart (Gen 6+ style effectiveness) ---
 const TYPE_MULT = (() => {
   const types = ["normal","fire","water","electric","grass","ice","fighting","poison","ground","flying","psychic","bug","rock","ghost","dragon","dark","steel","fairy"];
