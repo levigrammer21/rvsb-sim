@@ -400,6 +400,11 @@ function updateHud(){
   const r = active(b,"red");
   const u = active(b,"blue");
 
+  // Alive/total counts during battle
+  $("redCount").textContent = `${aliveCount(b.red)}/${b.red.length}`;
+  $("blueCount").textContent = `${aliveCount(b.blue)}/${b.blue.length}`;
+
+  
   $("redActiveName").textContent = r ? `— ${r.display}` : "";
   $("blueActiveName").textContent = u ? `— ${u.display}` : "";
 
