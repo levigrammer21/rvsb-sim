@@ -1,7 +1,10 @@
 // Red vs Blue Battle Sim (MVP)
 // - Uses PokéAPI for stats/types/moves and caches responses locally.
 // - Simplified battle rules (fast + fun). Upgraded AI + switching.
-
+document.addEventListener("DOMContentLoaded", () => {
+  const s = document.getElementById("status");
+  if (s) s.textContent = "✅ app.js loaded";
+});
 const POKEAPI = "https://pokeapi.co/api/v2";
 const $ = (id) => document.getElementById(id);
 
