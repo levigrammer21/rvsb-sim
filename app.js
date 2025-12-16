@@ -724,7 +724,16 @@ $("simBtn").addEventListener("click", ()=>{
     if (!state.battle || state.battle.over) return;
     stepBattle();
     safety++;
-    if (safety < 500 && !state.battle.over) ctx.attacker._hit500);
+let safety = 0;
+  const TICK_MS = 350; // slower battle speed (change this number)
+
+  const tick = () => {
+    if (!state.battle || state.battle.over) return;
+    stepBattle();
+    safety++;
+    if (safety < 500 && !state.battle.over) setTimeout(tick, TICK_MS);
+  };
+  tick();
   };
   tick();
 });
