@@ -1,126 +1,308 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Red vs Blue Battle Sim</title>
-  <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="stylesheet" href="./style.css?v=1">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Red vs Blue – Pokémon Battle Tournament</title>
+
+<style>
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #0b0b0b;
+  color: #eee;
+}
+header {
+  padding: 12px;
+  text-align: center;
+  background: linear-gradient(90deg, #b30000, #0033cc);
+  font-weight: 900;
+}
+main { padding: 12px; max-width: 1100px; margin: auto; }
+
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+button, select, input {
+  background: #1e1e1e;
+  color: #fff;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+button:hover { background:#2a2a2a; cursor:pointer; }
+
+.panel {
+  border: 1px solid #222;
+  border-radius: 12px;
+  padding: 10px;
+  margin: 10px 0;
+  background: #111;
+}
+
+.teamHeader {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  font-weight:800;
+}
+
+.ballsRow { display:flex; gap:6px; margin-top:6px; }
+.ball {
+  width:14px;height:14px;border-radius:50%;
+  border:1px solid #555;background:#eee;
+  position:relative;
+}
+.ball:after {
+  content:"";position:absolute;left:50%;top:50%;
+  width:100%;height:2px;background:#555;
+  transform:translate(-50%,-50%);
+}
+.ball.fainted { background:#444; opacity:.5; }
+
+#log {
+  white-space: pre-wrap;
+  font-family: monospace;
+  background:#000;
+  padding:10px;
+  border-radius:8px;
+  height:220px;
+  overflow:auto;
+}
+
+.bracket {
+  display:flex;
+  gap:20px;
+  overflow-x:auto;
+}
+.round {
+  min-width:180px;
+}
+.match {
+  border:1px solid #333;
+  border-radius:8px;
+  padding:6px;
+  margin-bottom:10px;
+}
+.match .winner {
+  font-weight:900;
+  color:#7CFC00;
+}
+
+.modal {
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.85);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.modal.hidden { display:none; }
+.modalContent {
+  background:#111;
+  border-radius:14px;
+  padding:14px;
+  max-width:90%;
+  max-height:90%;
+  overflow:auto;
+}
+</style>
 </head>
 
 <body>
-  <header class="topbar">
-    <div class="title">Red vs Blue Battle Sim</div>
+<header>🏆 Pokémon Battle Tournament Simulator</header>
 
-    <div class="topControls">
-      <button id="installHintBtn" class="mini">📲 Install</button>
-      <button id="ttsBtn" class="mini">🔊 Announcer: OFF</button>
-      <button id="dexBtn" class="mini">📖 Pokédex</button>
-    </div>
-  </header>
+<main>
 
-  <main class="wrap">
-    <section class="panel">
-      <div class="row gap">
-        <input id="searchName" placeholder="Enter Pokémon name (e.g. pikachu)" />
-        <select id="teamPick">
-          <option value="red">Red</option>
-          <option value="blue">Blue</option>
-        </select>
-        <select id="levelPick">
-          <option>10</option><option>25</option><option>35</option>
-          <option selected>50</option>
-          <option>75</option><option>100</option>
-        </select>
-        <button id="addBtn">Add</button>
-      </div>
+<div class="panel row">
+  <input id="redName" placeholder="Red Team Name" value="Red"/>
+  <input id="blueName" placeholder="Blue Team Name" value="Blue"/>
+  <button id="ttsBtn">🎙️ Announcer OFF</button>
+  <select id="voiceSelect"></select>
+  <select id="speedSelect">
+    <option value="1200">Slow</option>
+    <option value="700" selected>Normal</option>
+    <option value="300">Fast</option>
+  </select>
+</div>
 
-      <div class="row gap">
-        <button id="randomBtn">🎲 Random Teams</button>
-        <button id="clearBtn">🧹 Clear</button>
-        <button id="simBtn" disabled>⚔️ Sim Battle</button>
-        <button id="stepBtn" disabled>Step</button>
-      </div>
+<div class="panel row">
+  <button id="simBtn">⚔️ Battle</button>
+  <button id="tournamentBtn">🏆 Tournament</button>
+  <select id="tournamentSize">
+    <option value="4">4 Teams</option>
+    <option value="8" selected>8 Teams</option>
+    <option value="16">16 Teams</option>
+  </select>
+</div>
 
-      <div id="status" class="status">Ready</div>
-      <div id="battleStatus" class="battleStatus">No battle yet</div>
-
-      <div class="hudGrid">
-        <div class="hudCard" id="hudRed">
-          <div class="hudHead">
-            <input id="redName" class="teamName" value="Red" />
-            <div class="sub" id="redActiveName"></div>
-          </div>
-
-          <div class="balls" id="redBalls"></div>
-
-          <div class="hpBar"><div id="redHpFill" class="hpFill"></div></div>
-          <div class="hpText" id="redHpText">HP: —</div>
-          <div class="types" id="redTypes"></div>
-
-          <div class="countLine">
-            <span id="redPill" class="pill">0 Pokémon</span>
-            <span id="redCount" class="pill">0/0</span>
-          </div>
-        </div>
-
-        <div class="hudCard" id="hudBlue">
-          <div class="hudHead">
-            <input id="blueName" class="teamName" value="Blue" />
-            <div class="sub" id="blueActiveName"></div>
-          </div>
-
-          <div class="balls" id="blueBalls"></div>
-
-          <div class="hpBar"><div id="blueHpFill" class="hpFill"></div></div>
-          <div class="hpText" id="blueHpText">HP: —</div>
-          <div class="types" id="blueTypes"></div>
-
-          <div class="countLine">
-            <span id="bluePill" class="pill">0 Pokémon</span>
-            <span id="blueCount" class="pill">0/0</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="teamsGrid">
-        <div>
-          <h3>Red Team</h3>
-          <ul id="redList" class="list"></ul>
-        </div>
-        <div>
-          <h3>Blue Team</h3>
-          <ul id="blueList" class="list"></ul>
-        </div>
-      </div>
-    </section>
-
-    <section class="panel logPanel">
-      <div id="secretBox" class="secretBox" style="display:none;"></div>
-      <pre id="log" class="log"></pre>
-    </section>
-  </main>
-
-  <!-- Pokédex Modal -->
-  <div id="dexModal" class="modal hidden">
-    <div class="modalContent">
-      <div class="modalHeader">
-        <strong>Pokédex</strong>
-        <button id="dexClose" class="mini">✕</button>
-      </div>
-
-      <input id="dexSearch" placeholder="Search Pokémon…" />
-
-      <div class="dexCols">
-        <div id="dexList" class="dexList">Loading…</div>
-        <div id="dexDetails" class="dexDetails"></div>
-      </div>
-
-      <button id="dexMoreBtn" class="mini">Load more</button>
-    </div>
+<div class="panel">
+  <div class="teamHeader">
+    <span id="redTitle">Red</span>
+    <span id="redCount"></span>
   </div>
+  <div id="redBalls" class="ballsRow"></div>
+</div>
 
-  <script src="./app.js?v=3" defer></script>
-<script src="./dex.js?v=3" defer></script>
+<div class="panel">
+  <div class="teamHeader">
+    <span id="blueTitle">Blue</span>
+    <span id="blueCount"></span>
+  </div>
+  <div id="blueBalls" class="ballsRow"></div>
+</div>
+
+<div class="panel">
+  <strong>Battle Log</strong>
+  <div id="log"></div>
+</div>
+
+<div class="panel">
+  <strong>Tournament Bracket</strong>
+  <div id="bracket" class="bracket"></div>
+</div>
+
+</main>
+
+<div id="modal" class="modal hidden">
+  <div class="modalContent">
+    <button onclick="modal.classList.add('hidden')">Close</button>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<script>
+/* ================================
+   CORE UTILITIES
+================================ */
+const $ = id => document.getElementById(id);
+const log = (msg, speakIt=true)=>{
+  $("log").textContent += msg+"\\n";
+  $("log").scrollTop = $("log").scrollHeight;
+  if (speakIt) speak(msg);
+};
+
+/* ================================
+   TEXT TO SPEECH – SPORTS ANNOUNCER
+================================ */
+let TTS=false, voice=null;
+function loadVoices(){
+  const list = speechSynthesis.getVoices();
+  $("voiceSelect").innerHTML="";
+  list.forEach((v,i)=>{
+    const o=document.createElement("option");
+    o.value=i; o.textContent=`${v.name} (${v.lang})`;
+    $("voiceSelect").appendChild(o);
+  });
+  voice=list[0];
+}
+speechSynthesis.onvoiceschanged=loadVoices;
+
+function speak(text){
+  if(!TTS||!voice)return;
+  const u=new SpeechSynthesisUtterance(text);
+  u.voice=voice;
+  u.rate=0.95;
+  u.pitch=1.05;
+  speechSynthesis.speak(u);
+}
+
+/* ================================
+   UI LOGIC
+================================ */
+$("ttsBtn").onclick=()=>{
+  TTS=!TTS;
+  $("ttsBtn").textContent=TTS?"🎙️ Announcer ON":"🎙️ Announcer OFF";
+};
+$("voiceSelect").onchange=e=>{
+  voice=speechSynthesis.getVoices()[e.target.value];
+};
+$("speedSelect").onchange=e=>TICK=+e.target.value;
+
+let TICK=700;
+
+/* ================================
+   FAKE BATTLE ENGINE (STABLE)
+================================ */
+function fakeTeam(name){
+  return { name, alive:6 };
+}
+function renderBalls(el, alive){
+  el.innerHTML="";
+  for(let i=0;i<6;i++){
+    const d=document.createElement("div");
+    d.className="ball"+(i>=alive?" fainted":"");
+    el.appendChild(d);
+  }
+}
+
+function battle(red, blue){
+  renderBalls($("redBalls"),6);
+  renderBalls($("blueBalls"),6);
+  let turn=1;
+  const interval=setInterval(()=>{
+    if(red.alive<=0||blue.alive<=0){
+      clearInterval(interval);
+      const win=red.alive>0?red.name:blue.name;
+      log(`🏁 ${win} wins the battle!`);
+      return;
+    }
+    log(`Turn ${turn}: The crowd roars!`);
+    if(Math.random()<0.5){ blue.alive--; }
+    else { red.alive--; }
+    renderBalls($("redBalls"),red.alive);
+    renderBalls($("blueBalls"),blue.alive);
+    turn++;
+  },TICK);
+}
+
+/* ================================
+   TOURNAMENT + BRACKET
+================================ */
+function runTournament(){
+  const size=+$("tournamentSize").value;
+  const teams=[];
+  for(let i=0;i<size;i++) teams.push({name:`Team ${i+1}`});
+  const bracket=$("bracket");
+  bracket.innerHTML="";
+  let round=1;
+  let current=teams;
+
+  while(current.length>1){
+    const col=document.createElement("div");
+    col.className="round";
+    col.innerHTML=`<strong>Round ${round}</strong>`;
+    const next=[];
+    for(let i=0;i<current.length;i+=2){
+      const a=current[i], b=current[i+1];
+      const win=Math.random()<0.5?a:b;
+      const div=document.createElement("div");
+      div.className="match";
+      div.innerHTML=`${a.name} vs ${b.name}<div class="winner">Winner: ${win.name}</div>`;
+      col.appendChild(div);
+      next.push(win);
+    }
+    bracket.appendChild(col);
+    current=next;
+    round++;
+  }
+  log(`🏆 TOURNAMENT CHAMPION: ${current[0].name}`);
+}
+
+/* ================================
+   BUTTONS
+================================ */
+$("simBtn").onclick=()=>{
+  $("log").textContent="";
+  const r={name:$("redName").value||"Red",alive:6};
+  const b={name:$("blueName").value||"Blue",alive:6};
+  $("redTitle").textContent=r.name;
+  $("blueTitle").textContent=b.name;
+  battle(r,b);
+};
+
+$("tournamentBtn").onclick=()=>{
+  $("log").textContent="";
+  runTournament();
+};
+</script>
 </body>
 </html>
