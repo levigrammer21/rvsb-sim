@@ -536,8 +536,7 @@ function doAttack(atkTeam, atkMon, mv, defTeam, defMon){
   defMon.curHP = Math.max(0, defMon.curHP - dmg);
   atkMon._hitsInRow = (atkMon._hitsInRow||0) + 1;
 
-  logLine(`${atkTeam.toUpperCase()} ${atkMon.display} used ${cap(mv.name.replace(/-/g," "))}! (-${dmg} HP)`);
-
+  logLine(`${atkTeam.toUpperCase()} ${atkMon.display} ${pick(FLAVOR.attackLead)} used ${cap(mv.name.replace(/-/g," "))}! (-${dmg} HP)`);
   if (d.crit) logLine(`  ➤ Critical hit!`);
   if (d.eff >= 2) logLine(`  ➤ It's super effective!`);
   if (d.eff > 0 && d.eff < 1) logLine(`  ➤ It's not very effective…`);
