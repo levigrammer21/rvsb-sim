@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Red vs Blue Battle Sim</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#111111">
+  <link rel="icon" href="icons/icon-192.png">
+  <style>
+    :root{--bg:#0f1115;--card:#151a22;--muted:#8b93a7;--text:#eef2ff;--red:#ff4d4d;--blue:#4da3ff;--ok:#44d18a;--warn:#ffd166;}
+    *{box-sizing:border-box;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+    body{margin:0;background:linear-gradient(180deg,#0b0d12, #0f1115);color:var(--text)}
+    header{padding:16px 14px;position:sticky;top:0;background:rgba(15,17,21,.9);backdrop-filter:blur(10px);border-bottom:1px solid rgba(255,255,255,.06)}
+    h1{font-size:18px;margin:0 0 6px 0}
+    .sub{color:var(--muted);font-size:12px}
+    main{padding:14px;max-width:980px;margin:0 auto}
+    .grid{display:grid;grid-template-columns:1fr;gap:12px}
+    @media(min-width:860px){.grid{grid-template-columns:1fr 1fr}}
+    .card{background:rgba(21,26,34,.92);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:12px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+    .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    input,select,button{border-radius:12px;border:1px solid rgba(255,255,255,.10);background:#0f1218;color:var(--text);padding:10px 12px;font-size:14px}
+    input{flex:1;min-width:180px}
+    button{cursor:pointer}
+    button.primary{background:linear-gradient(180deg,#1b2332,#121826);border-color:rgba(255,255,255,.14)}
+    button.red{border-color:rgba(255,77,77,.45)}
+    button.blue{border-color:rgba(77,163,255,.45)}
+    button:disabled{opacity:.55;cursor:not-allowed}
+    .pill{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.10);color:var(--muted)}
+    .teamTitle{display:flex;justify-content:space-between;align-items:center;margin:0 0 10px 0}
+    .teamTitle span{font-weight:700}
+    .teamTitle .teamPill{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.12)}
+    .teamPill.red{color:#ffd6d6;border-color:rgba(255,77,77,.35)}
+    .teamPill.blue{color:#d6eaff;border-color:rgba(77,163,255,.35)}
+    ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+    li{display:flex;gap:10px;align-items:center;justify-content:space-between;background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:10px}
+    .mon{display:flex;gap:10px;align-items:center}
+    .sprite{width:56px;height:56px;border-radius:12px;background:rgba(255,255,255,.06);display:grid;place-items:center;overflow:hidden}
+    .sprite img{width:64px;height:64px;image-rendering:pixelated}
+    .name{font-weight:650}
+    .meta{font-size:12px;color:var(--muted)}
+    .actions{display:flex;gap:8px}
+    .mini{font-size:12px;padding:8px 10px}
+    .arena{display:grid;grid-template-columns:1fr;gap:10px}
+    .arenaTop{display:grid;grid-template-columns:1fr;gap:10px}
+    @media(min-width:860px){.arenaTop{grid-template-columns:1fr 1fr}}
+    .hud{padding:12px;border-radius:16px;border:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.18)}
+    .hpwrap{margin-top:8px}
+    .hpbar{height:10px;border-radius:999px;background:rgba(255,255,255,.10);overflow:hidden}
+    .hpfill{height:100%;width:100%;background:linear-gradient(90deg,var(--ok),#2fbf71);transition:width .35s ease}
+    .hptext{font-size:12px;color:var(--muted);display:flex;justify-content:space-between;margin-top:6px}
+    .log{height:260px;overflow:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:1.35;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:10px;white-space:pre-wrap}
+    .shake{animation:shake .18s linear 2}
+    @keyframes shake{0%{transform:translateX(0)}25%{transform:translateX(-4px)}50%{transform:translateX(4px)}75%{transform:translateX(-3px)}100%{transform:translateX(0)}}
+    .secret{font-size:12px;color:var(--warn);margin-top:8px}
+  </style>
+</head>
+<body>
+<header>
+  <h1>Red vs Blue Pokémon Battle Sim</h1>
+  <div class="sub">Add Pokémon to each team, then hit <b>Sim Battle</b>. Works on Android as an installable PWA.</div>
+</header>
+
+<main class="grid">
+  <section class="card">
+    <div class="teamTitle">
+      <span>Team Builder</span>
+      <span class="pill">Tip: type a name like “garchomp”</span>
+    </div>
+    <div class="row">
+      <input id="searchName" placeholder="Pokémon name (e.g., pikachu)"/>
+      <select id="teamPick">
+        <option value="red">Red Team</option>
+        <option value="blue">Blue Team</option>
+      </select>
+      <select id="levelPick">
+        <option value="50">Lv 50</option>
+        <option value="100">Lv 100</option>
+        <option value="30">Lv 30</option>
+        <option value="10">Lv 10</option>
+      </select>
+      <button id="addBtn" class="primary">Add</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <button id="randomBtn" class="mini">Random 6v6</button>
+      <button id="clearBtn" class="mini">Clear Teams</button>
+      <span id="status" class="pill">Ready</span>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <span class="pill">We cache PokéAPI data to be polite.</span>
+      <span class="pill">Secret abilities exist 👀</span>
+    </div>
+  </section>
+
+  <section class="card arena">
+    <div class="arenaTop">
+      <div class="hud" id="hudRed">
+        <div class="row" style="justify-content:space-between">
+          <div><b style="color:var(--red)">RED</b> <span id="redActiveName" class="meta"></span></div>
+          <span class="teamPill red" id="redCount">0/6</span>
+        </div>
+        <div class="hpwrap">
+          <div class="hpbar"><div id="redHpFill" class="hpfill"></div></div>
+          <div class="hptext"><span id="redHpText">HP: —</span><span id="redTypes" class="meta"></span></div>
+        </div>
+      </div>
+
+      <div class="hud" id="hudBlue">
+        <div class="row" style="justify-content:space-between">
+          <div><b style="color:var(--blue)">BLUE</b> <span id="blueActiveName" class="meta"></span></div>
+          <span class="teamPill blue" id="blueCount">0/6</span>
+        </div>
+        <div class="hpwrap">
+          <div class="hpbar"><div id="blueHpFill" class="hpfill"></div></div>
+          <div class="hptext"><span id="blueHpText">HP: —</span><span id="blueTypes" class="meta"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row">
+      <button id="simBtn" class="primary" disabled>Sim Battle</button>
+      <button id="stepBtn" class="mini" disabled>Step</button>
+      <button id="installHintBtn" class="mini">How to Install on Android</button>
+      <span id="battleStatus" class="pill">No battle yet</span>
+    </div>
+
+    <div id="secretBox" class="secret" style="display:none"></div>
+
+    <div class="log" id="log" aria-live="polite"></div>
+  </section>
+
+  <section class="card">
+    <div class="teamTitle"><span style="color:var(--red)">Red Team</span><span class="teamPill red" id="redPill">0 Pokémon</span></div>
+    <ul id="redList"></ul>
+  </section>
+
+  <section class="card">
+    <div class="teamTitle"><span style="color:var(--blue)">Blue Team</span><span class="teamPill blue" id="bluePill">0 Pokémon</span></div>
+    <ul id="blueList"></ul>
+  </section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
