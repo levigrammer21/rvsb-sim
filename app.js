@@ -503,7 +503,7 @@ function doAttack(atkTeam, atkMon, mv, defTeam, defMon){
 
   // Accuracy
   if (!roll(mv.acc ?? 100)) {
-    logLine(`${atkTeam.toUpperCase()} ${atkMon.display} used ${cap(mv.name.replace(/-/g," "))}… and missed!`);
+    logLine(`${atkTeam.toUpperCase()} ${atkMon.display} used ${cap(mv.name.replace(/-/g," "))}${pick(FLAVOR.miss)}`);
     atkMon._hitsInRow = 0;
     return;
   }
