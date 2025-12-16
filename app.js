@@ -537,11 +537,10 @@ function doAttack(atkTeam, atkMon, mv, defTeam, defMon){
   atkMon._hitsInRow = (atkMon._hitsInRow||0) + 1;
 
   logLine(`${atkTeam.toUpperCase()} ${atkMon.display} ${pick(FLAVOR.attackLead)} used ${cap(mv.name.replace(/-/g," "))}! (-${dmg} HP)`);
-  if (d.crit) logLine(`  ➤ Critical hit!`);
-  if (d.eff >= 2) logLine(`  ➤ It's super effective!`);
-  if (d.eff > 0 && d.eff < 1) logLine(`  ➤ It's not very effective…`);
-  if (d.eff === 0) logLine(`  ➤ It doesn't affect the target…`);
-
+  if (d.crit) logLine(`  ➤ Critical hit! ${pick(FLAVOR.crit)}`);
+if (d.eff >= 2) logLine(`  ➤ It's super effective! ${pick(FLAVOR.super)}`);
+if (d.eff > 0 && d.eff < 1) logLine(`  ➤ It's not very effective… ${pick(FLAVOR.notVery)}`);
+if (d.eff === 0) logLine(`  ➤ It doesn't affect the target… ${pick(FLAVOR.immune)}`);
   shake(defTeam);
   updateHud();
 }
