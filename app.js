@@ -551,7 +551,7 @@ function handleFaint(defTeam, atkTeam){
   if (!defMon || defMon.curHP > 0) return false;
 
   defMon.fainted = true;
-  logLine(`${defTeam.toUpperCase()} ${defMon.display} fainted!`);
+  logLine(`${defTeam.toUpperCase()} ${defMon.display} fainted! ${pick(FLAVOR.faint)}`);
 
   const list = defTeam==="red" ? b.red : b.blue;
   const idx = defTeam==="red" ? b.rIndex : b.bIndex;
