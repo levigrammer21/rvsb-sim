@@ -581,6 +581,7 @@ function stepBattle(){
 
   b.turn++;
   setBattleStatus(`Turn ${b.turn}`);
+  if (b.turn === 1 || roll(35)) logLine(`✨ ${pick(FLAVOR.turnStart)}`);
 
   const r0 = active(b,"red");
   const u0 = active(b,"blue");
