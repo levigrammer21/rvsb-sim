@@ -67,8 +67,9 @@
     $("dexSearch").oninput = () => {
       if (!dexListCache) return;
       const q = ($("dexSearch").value || "").trim().toLowerCase();
-      const filtered = dexListCache.filter(x => x.name.includes(q));
-      renderDexList(filtered);
+const filtered = dexListCache.filter(x => x.name.includes(q));
+renderDexList(filtered);
+renderDexLoadMore();
     };
   }
 
