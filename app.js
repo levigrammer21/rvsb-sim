@@ -1222,29 +1222,107 @@ function stepBattle(){
 }
 
 // --- Buttons ---
-$("addBtn").addEventListener("click", async ()=>{
-  const name = $("searchName").value;
-  const team = $("teamPick").value;
-  const level = parseInt($("levelPick").value,10);
+function initApp(){
+  // --- Buttons ---
+  $("addBtn")?.addEventListener("click", async ()=>{
+    const name = $("searchName").value;
+    const team = $("teamPick").value;
+    const level = parseInt($("levelPick").value,10);
 
-  if (!name) return;
-  if (state[team].length >= 6) { setStatus("That team already has 6."); return; }
+    if (!name) return;
+    if (state[team].length >= 6) { setStatus("That team already has 6."); return; }
 
-  setStatus("Loading…");
-  try {
-    const mon = await loadPokemon(name, level);
-    state[team].push(mon);
+    setStatus("Loading…");
+    try {
+      const mon = await loadPokemon(name, level);
+      state[team].push(mon);
+      renderTeams();
+      logLine(`Added ${mon.display} to ${team.toUpperCase()} (Lv ${level}).`);
+      setStatus("Ready");
+      $("searchName").value = "";
+    } catch (e) {
+      console.error(e);
+      setStatus("Couldn’t find that Pokémon. Try a different spelling.");
+    }
+  });
+
+  $("randomBtn")?.addEventListener("click", async ()=>{
+    const randId = () => randInt(1, 1010);
+    state.red = []; state.blue = [];
     renderTeams();
-    logLine(`Added ${mon.display} to ${team.toUpperCase()} (Lv ${level}).`);
-    setStatus("Ready");
-    $("searchName").value = "";
-  } catch (e) {
-    console.error(e);
-    setStatus("Couldn’t find that Pokémon. Try a different spelling.");
-  }
-});
+    $("log").textContent = "";
+    setStatus("Loading random teams…");
+    try {
+      for (let i=0;i<6;i++){
+        const level = 50;
+        const rid = randId(), bid = randId();
+        const r = await cachedFetchJson(`${POKEAPI}/pokemon/${rid}`, `pokemonid:${rid}`, 1000*60*60*24*180);
+        const b = await cachedFetchJson(`${POKEAPI}/pokemon/${bid}`, `pokemonid:${bid}`, 1000*60*60*24*180);
+        state.red.push(await loadPokemon(r.name, level));
+        state.blue.push(await loadPokemon(b.name, level));
+        renderTeams();
+        await new Promise(r=>setTimeout(r, 60));
+      }
+      setStatus("Ready");
+      logLine("Random teams generated.");
+    } catch (e) {
+      console.error(e);
+      setStatus("Random team failed (network?). Try again.");
+    }
+  });
 
-$("randomBtn").addEventListener("click", async ()=>{
+  $("clearBtn")?.addEventListener("click", ()=>{
+    state.red=[]; state.blue=[];
+    state.battle=null;
+    $("log").textContent="";
+    $("secretBox").style.display="none";
+    setBattleStatus("No battle yet");
+    renderTeams();
+  });
+
+  $("simBtn")?.addEventListener("click", ()=>{
+    $("log").textContent = "";
+    $("secretBox").style.display="none";
+    state.battle = newBattle();
+    setBattleStatus("Battle started");
+    logLine("⚔️ Battle start!");
+    updateHud();
+    $("stepBtn").disabled = false;
+
+    let safety = 0;
+    const tick = () => {
+      if (!state.battle || state.battle.over) return;
+      stepBattle();
+      safety++;
+      if (safety < 500 && !state.battle.over) setTimeout(tick, 160);
+    };
+    tick();
+  });
+
+  $("stepBtn")?.addEventListener("click", ()=>{
+    if (!state.battle) return;
+    stepBattle();
+  });
+
+  $("installHintBtn")?.addEventListener("click", ()=>{
+    alert("On Android (Chrome): open this app URL ➜ tap ⋮ menu ➜ 'Add to Home screen' / 'Install app'.\n\nPWAs install best when served over HTTPS (not file://).");
+  });
+
+  // --- Service worker registration ---
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", async () => {
+      try { await navigator.serviceWorker.register("./sw.js"); } catch {}
+    });
+  }
+
+  // Initial render
+  renderTeams();
+  logLine("Ready. Add Pokémon to Red and Blue, then Sim Battle.");
+}
+
+// ✅ Wait until the page exists before wiring buttons
+window.addEventListener("DOMContentLoaded", initApp);
+
   // Fill teams with random Pokémon IDs (1..1025-ish; we’ll just use 1..1010 to be safe)
   const randId = () => randInt(1, 1010);
   state.red = []; state.blue = [];
