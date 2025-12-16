@@ -88,12 +88,31 @@
   async function loadDexList() {
     if (dexListCache) return dexListCache;
 
-    // Gen 1 list for speed/stability (you can change to 1025 later)
-    const res = await fetch(`${POKEAPI}/pokemon?limit=151`);
-    const json = await res.json();
-    dexListCache = json.results || [];
-    return dexListCache;
+let dexNextUrl = `${POKEAPI}/pokemon?limit=200&offset=0`; // chunk size
+let dexLoadingMore = false;
+
+async function loadDexList() {
+  if (!dexListCache) dexListCache = [];
+  // Load first page if empty
+  if (dexListCache.length === 0) {
+    await loadMoreDex();
   }
+  return dexListCache;
+}
+
+async function loadMoreDex() {
+  if (!dexNextUrl || dexLoadingMore) return;
+  dexLoadingMore = true;
+
+  const res = await fetch(dexNextUrl);
+  const json = await res.json();
+
+  dexNextUrl = json.next; // null when done
+  const results = json.results || [];
+
+  dexListCache = dexListCache.concat(results);
+  dexLoadingMore = false;
+}
 
   function renderDexList(list) {
     const el = $("dexList");
