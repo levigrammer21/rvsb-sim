@@ -881,7 +881,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     $("stepBtn").disabled = false;
 
     // Auto sim speed
-    const TICK_MS = 350;
+    const TICK_MS = 800;
     let safety = 0;
 
     const tick = () => {
