@@ -84,6 +84,36 @@
 });
   }
 
+  function renderDexLoadMore(){
+  const el = $("dexList");
+
+  // Remove old button if it exists
+  const old = document.getElementById("dexMoreBtn");
+  if (old) old.remove();
+
+  const btn = document.createElement("button");
+  btn.id = "dexMoreBtn";
+  btn.textContent = dexNextUrl ? "Load more" : "All loaded";
+  btn.disabled = !dexNextUrl;
+
+  btn.style.cssText = `
+    width:100%;
+    margin-top:8px;
+    padding:10px;
+    border-radius:10px;
+    border:1px solid #333;
+  `;
+
+  btn.onclick = async () => {
+    btn.textContent = "Loading…";
+    btn.disabled = true;
+    await loadMoreDex();
+    renderDexList(dexListCache);
+    renderDexLoadMore();
+  };
+
+  el.appendChild(btn);
+  }
   function hideDex() {
     $("dexModal").style.display = "none";
   }
