@@ -204,6 +204,46 @@ function chooseBestSwitch(team, activeIndex, enemyActive) {
 }\n`;
   el.scrollTop = el.scrollHeight;
 }
+function decideAIAction({ team, activeIndex, enemyActive }) {
+  const active = team[activeIndex];
+
+  // If fainted, must switch
+  if (active.currentHP <= 0) {
+    const forced = chooseBestSwitch(team, activeIndex, enemyActive);
+    return forced !== null ? { type: "switch", to: forced } : { type: "struggle" };
+  }
+
+  // Check how bad the matchup is
+  const scoreNow = matchupScore(active, enemyActive);
+
+  // If low HP and matchup is bad, switching becomes more likely
+  const lowHP = hpPct(active) <= 0.35;
+  const veryLowHP = hpPct(active) <= 0.20;
+
+  // Evaluate best switch option
+  const bestSwitchIdx = chooseBestSwitch(team, activeIndex, enemyActive);
+  if (bestSwitchIdx !== null) {
+    const switchScore = matchupScore(team[bestSwitchIdx], enemyActive);
+
+    // Switch rules (tuned to "feels smart" without being perfect)
+    const shouldSwitch =
+      (scoreNow < -15 && switchScore > scoreNow + 8) ||        // clearly losing
+      (lowHP && switchScore > scoreNow + 5) ||                 // low HP, better option exists
+      (veryLowHP && switchScore > scoreNow - 2);               // emergency switch
+
+    // Add small randomness so it doesn't always do the same thing
+    const rng = Math.random();
+    const switchBias = shouldSwitch ? 0.85 : 0.10;
+
+    if (rng < switchBias) {
+      return { type: "switch", to: bestSwitchIdx };
+    }
+  }
+
+  // Otherwise, attack with best move
+  const mv = bestMove(active, enemyActive);
+  return { type: "move", move: mv };
+}
 
 function setStatus(msg){ $("status").textContent = msg; }
 function setBattleStatus(msg){ $("battleStatus").textContent = msg; }
