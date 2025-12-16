@@ -25,7 +25,37 @@ async function cachedFetchJson(url, cacheKey, maxAgeMs = 1000*60*60*24*30) { // 
   cacheSet(cacheKey, { t: Date.now(), v: json });
   return json;
 }
+// --- Text-to-Speech (Narrator) ---
+let TTS_ENABLED = false;
+let ttsQueue = [];
+let speaking = false;
 
+function speak(text) {
+  if (!TTS_ENABLED || !window.speechSynthesis) return;
+
+  ttsQueue.push(text);
+  if (!speaking) speakNext();
+}
+
+function speakNext() {
+  if (ttsQueue.length === 0) {
+    speaking = false;
+    return;
+  }
+
+  speaking = true;
+  const utter = new SpeechSynthesisUtterance(ttsQueue.shift());
+
+  // Voice tuning (good defaults for Android)
+  utter.rate = 1.0;
+  utter.pitch = 1.0;
+  utter.volume = 1.0;
+
+  utter.onend = speakNext;
+  utter.onerror = speakNext;
+
+  speechSynthesis.speak(utter);
+}
 // --- Flavor text ---
 const FLAVOR = {
   turnStart: [
