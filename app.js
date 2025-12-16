@@ -567,7 +567,7 @@ function handleFaint(defTeam, atkTeam){
     if (defTeam==="red") b.rIndex = next;
     else b.bIndex = next;
     const newActive = active(b, defTeam);
-    logLine(`${defTeam.toUpperCase()} sends out ${newActive.display}!`);
+    logLine(`${defTeam.toUpperCase()} sends out ${newActive.display} — it ${pick(FLAVOR.sendOut)}`);
     updateHud();
     return false;
   }
