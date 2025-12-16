@@ -76,7 +76,132 @@ function logLine(msg){
   const el = $("log");
   const t = new Date();
   const stamp = `${t.getHours().toString().padStart(2,"0")}:${t.getMinutes().toString().padStart(2,"0")}:${t.getSeconds().toString().padStart(2,"0")}`;
-  el.textContent += `[${stamp}] ${msg}\n`;
+  el.textContent += `[${stamp}] ${msg// ---------- AI + Switching Helpers ----------
+
+// Basic Gen-ish type chart (covers common types). Missing combos default to 1.
+const TYPE_CHART = {
+  normal: { rock: 0.5, ghost: 0, steel: 0.5 },
+  fire: { fire: 0.5, water: 0.5, grass: 2, ice: 2, bug: 2, rock: 0.5, dragon: 0.5, steel: 2 },
+  water: { fire: 2, water: 0.5, grass: 0.5, ground: 2, rock: 2, dragon: 0.5 },
+  electric: { water: 2, electric: 0.5, grass: 0.5, ground: 0, flying: 2, dragon: 0.5 },
+  grass: { fire: 0.5, water: 2, grass: 0.5, poison: 0.5, ground: 2, flying: 0.5, bug: 0.5, rock: 2, dragon: 0.5, steel: 0.5 },
+  ice: { fire: 0.5, water: 0.5, grass: 2, ground: 2, flying: 2, dragon: 2, steel: 0.5, ice: 0.5 },
+  fighting: { normal: 2, ice: 2, rock: 2, dark: 2, steel: 2, poison: 0.5, flying: 0.5, psychic: 0.5, bug: 0.5, ghost: 0, fairy: 0.5 },
+  poison: { grass: 2, fairy: 2, poison: 0.5, ground: 0.5, rock: 0.5, ghost: 0.5, steel: 0 },
+  ground: { fire: 2, electric: 2, grass: 0.5, poison: 2, flying: 0, bug: 0.5, rock: 2, steel: 2 },
+  flying: { grass: 2, electric: 0.5, fighting: 2, bug: 2, rock: 0.5, steel: 0.5 },
+  psychic: { fighting: 2, poison: 2, psychic: 0.5, steel: 0.5, dark: 0 },
+  bug: { grass: 2, psychic: 2, dark: 2, fire: 0.5, fighting: 0.5, poison: 0.5, flying: 0.5, ghost: 0.5, steel: 0.5, fairy: 0.5 },
+  rock: { fire: 2, ice: 2, flying: 2, bug: 2, fighting: 0.5, ground: 0.5, steel: 0.5 },
+  ghost: { psychic: 2, ghost: 2, dark: 0.5, normal: 0 },
+  dragon: { dragon: 2, steel: 0.5, fairy: 0 },
+  dark: { psychic: 2, ghost: 2, fighting: 0.5, dark: 0.5, fairy: 0.5 },
+  steel: { ice: 2, rock: 2, fairy: 2, fire: 0.5, water: 0.5, electric: 0.5, steel: 0.5 },
+  fairy: { fighting: 2, dragon: 2, dark: 2, fire: 0.5, poison: 0.5, steel: 0.5 }
+};
+
+function typeEffectiveness(moveType, defenderTypes) {
+  const chartRow = TYPE_CHART[moveType] || {};
+  let mult = 1;
+  for (const t of defenderTypes) {
+    const m = chartRow[t] ?? 1;
+    mult *= m;
+  }
+  return mult;
+}
+
+function stabBonus(moveType, attackerTypes) {
+  return attackerTypes.includes(moveType) ? 1.5 : 1;
+}
+
+// Expected damage proxy (fast, not perfect)
+function expectedDamage({ attacker, defender, move }) {
+  // move fields we try to use: power, type, accuracy, damage_class
+  const power = move.power ?? 60;
+  const acc = (move.accuracy ?? 100) / 100;
+  const eff = typeEffectiveness(move.type, defender.types);
+  const stab = stabBonus(move.type, attacker.types);
+
+  // Pick atk/def based on physical/special; fallback to atk/def
+  const atkStat = move.damage_class === "special" ? attacker.stats.spAtk : attacker.stats.atk;
+  const defStat = move.damage_class === "special" ? defender.stats.spDef : defender.stats.def;
+
+  // Very simplified damage core
+  const base = ((atkStat / Math.max(1, defStat)) * power);
+  const critChance = 0.0625; // ~1/16
+  const critMult = 1.5;
+  const critEV = (1 - critChance) * 1 + critChance * critMult;
+
+  // Random roll EV ~0.925 average (0.85-1.0)
+  const rollEV = 0.925;
+
+  // Add a small “luck” noise so AI isn’t robotic
+  const styleNoise = 0.95 + Math.random() * 0.1;
+
+  return base * eff * stab * acc * critEV * rollEV * styleNoise;
+}
+
+// Choose best move (by expected damage)
+function bestMove(attacker, defender) {
+  if (!attacker.moves?.length) return null;
+  let best = attacker.moves[0];
+  let bestScore = -Infinity;
+  for (const mv of attacker.moves) {
+    const score = expectedDamage({ attacker, defender, move: mv });
+    if (score > bestScore) {
+      bestScore = score;
+      best = mv;
+    }
+  }
+  return best;
+}
+
+// Evaluate matchup: higher = better for attacker
+function matchupScore(attacker, defender) {
+  const mv = bestMove(attacker, defender);
+  const out = mv ? expectedDamage({ attacker, defender, move: mv }) : 0;
+
+  // Approximate incoming threat: assume defender uses its best move too
+  const incomingMv = bestMove(defender, attacker);
+  const inc = incomingMv ? expectedDamage({ attacker: defender, defender: attacker, move: incomingMv }) : 0;
+
+  // Prefer being faster a bit
+  const speedEdge = attacker.stats.spd >= defender.stats.spd ? 1.1 : 0.95;
+
+  return (out * speedEdge) - (inc * 0.9);
+}
+
+function hpPct(p) {
+  return p.currentHP / Math.max(1, p.maxHP);
+}
+
+// Choose switch target if switching is smart
+function chooseBestSwitch(team, activeIndex, enemyActive) {
+  let bestIdx = null;
+  let best = -Infinity;
+
+  for (let i = 0; i < team.length; i++) {
+    if (i === activeIndex) continue;
+    const cand = team[i];
+    if (cand.currentHP <= 0) continue;
+
+    const score = matchupScore(cand, enemyActive);
+
+    // Avoid switching into a big hit (soft penalty)
+    const incomingMv = bestMove(enemyActive, cand);
+    const danger = incomingMv ? expectedDamage({ attacker: enemyActive, defender: cand, move: incomingMv }) : 0;
+    const dangerPenalty = danger * 0.5;
+
+    const finalScore = score - dangerPenalty;
+    if (finalScore > best) {
+      best = finalScore;
+      bestIdx = i;
+    }
+  }
+
+  return bestIdx;
+}
+}\n`;
   el.scrollTop = el.scrollHeight;
 }
 
