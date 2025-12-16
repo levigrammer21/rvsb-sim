@@ -78,7 +78,10 @@
     $("dexDetails").innerHTML = "";
     $("dexList").textContent = "Loading list…";
     $("dexSearch").value = "";
-    loadDexList().then(list => renderDexList(list));
+    loadDexList().then(list => {
+  renderDexList(list);
+  renderDexLoadMore();
+});
   }
 
   function hideDex() {
