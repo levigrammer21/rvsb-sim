@@ -1,214 +1,109 @@
-// dex.js - Pokédex UI (safe add-on; does not touch battle logic)
-(() => {
-  const $ = (id) => document.getElementById(id);
+// dex.js - All Pokémon Pokédex with pagination
+// Safe: does not affect battle logic.
 
-  // We rely on these existing globals from app.js:
-  // - POKEAPI
-  // - cachedFetchJson
-  // - cap
+const DEX = {
+  list: [],
+  next: `${POKEAPI}/pokemon?limit=200&offset=0`,
+  loading: false,
+};
 
-  let dexListCache = null;
-
-  function ensureDexUI() {
-    // Add button if it doesn't exist
-    const controls = document.querySelector("#controls") || document.body;
-    if (!$("dexBtn")) {
-      const btn = document.createElement("button");
-      btn.id = "dexBtn";
-      btn.textContent = "📖 Pokédex";
-      btn.style.marginLeft = "6px";
-      // Put it near the Sim/Clear buttons if possible
-      (document.querySelector("#simBtn")?.parentElement || controls).appendChild(btn);
-    }
-
-    // Add modal if it doesn't exist
-    if (!$("dexModal")) {
-      const modal = document.createElement("div");
-      modal.id = "dexModal";
-      modal.style.cssText = `
-        position:fixed; inset:0; background:rgba(0,0,0,.65); z-index:9999;
-        display:none; align-items:center; justify-content:center; padding:10px;
-      `;
-
-      modal.innerHTML = `
-        <div style="
-          width:95%; max-width:520px; max-height:85vh; overflow:hidden;
-          background:#111; color:#fff; border-radius:14px; padding:10px;
-          display:flex; flex-direction:column; gap:8px;
-          box-shadow:0 12px 40px rgba(0,0,0,.5);
-        ">
-          <div style="display:flex; align-items:center; justify-content:space-between;">
-            <strong>Pokédex</strong>
-            <button id="dexClose" style="font-size:16px;">✕</button>
-          </div>
-
-          <input id="dexSearch" placeholder="Search Pokémon…" style="
-            padding:8px; border-radius:8px; border:none; outline:none;
-          "/>
-
-          <div style="display:grid; grid-template-columns: 1fr; gap:8px; overflow:auto;">
-            <div id="dexList" style="border-top:1px solid #222; padding-top:8px;"></div>
-            <div id="dexDetails" style="border-top:1px solid #222; padding-top:8px;"></div>
-          </div>
-        </div>
-      `;
-      document.body.appendChild(modal);
-
-      // close on background click
-      modal.addEventListener("click", (e) => {
-        if (e.target === modal) hideDex();
-      });
-    }
-
-    // Wire events
-    $("dexBtn").onclick = showDex;
-    $("dexClose").onclick = hideDex;
-
-    $("dexSearch").oninput = () => {
-      if (!dexListCache) return;
-      const q = ($("dexSearch").value || "").trim().toLowerCase();
-const filtered = dexListCache.filter(x => x.name.includes(q));
-renderDexList(filtered);
-renderDexLoadMore();
-    };
+function showDex(){
+  $("dexModal").classList.remove("hidden");
+  $("dexDetails").innerHTML = "";
+  $("dexSearch").value = "";
+  if (DEX.list.length === 0) {
+    $("dexList").textContent = "Loading…";
+    loadMoreDex().then(()=>renderDexList(DEX.list));
+  } else {
+    renderDexList(DEX.list);
   }
-
-  function showDex() {
-    ensureDexUI();
-    $("dexModal").style.display = "flex";
-    $("dexDetails").innerHTML = "";
-    $("dexList").textContent = "Loading list…";
-    $("dexSearch").value = "";
-    loadDexList().then(list => {
-  renderDexList(list);
-  renderDexLoadMore();
-});
-  }
-
-  function renderDexLoadMore(){
-  const el = $("dexList");
-
-  // Remove old button if it exists
-  const old = document.getElementById("dexMoreBtn");
-  if (old) old.remove();
-
-  const btn = document.createElement("button");
-  btn.id = "dexMoreBtn";
-  btn.textContent = dexNextUrl ? "Load more" : "All loaded";
-  btn.disabled = !dexNextUrl;
-
-  btn.style.cssText = `
-    width:100%;
-    margin-top:8px;
-    padding:10px;
-    border-radius:10px;
-    border:1px solid #333;
-  `;
-
-  btn.onclick = async () => {
-    btn.textContent = "Loading…";
-    btn.disabled = true;
-    await loadMoreDex();
-    renderDexList(dexListCache);
-    renderDexLoadMore();
-  };
-
-  el.appendChild(btn);
-  }
-  function hideDex() {
-    $("dexModal").style.display = "none";
-  }
-
-  async function loadDexList() {
-    if (dexListCache) return dexListCache;
-
-let dexNextUrl = `${POKEAPI}/pokemon?limit=200&offset=0`; // chunk size
-let dexLoadingMore = false;
-
-async function loadDexList() {
-  if (!dexListCache) dexListCache = [];
-  // Load first page if empty
-  if (dexListCache.length === 0) {
-    await loadMoreDex();
-  }
-  return dexListCache;
+  updateDexMoreBtn();
 }
 
-async function loadMoreDex() {
-  if (!dexNextUrl || dexLoadingMore) return;
-  dexLoadingMore = true;
+function hideDex(){
+  $("dexModal").classList.add("hidden");
+}
 
-  const res = await fetch(dexNextUrl);
+async function loadMoreDex(){
+  if (!DEX.next || DEX.loading) return;
+  DEX.loading = true;
+  updateDexMoreBtn();
+
+  const res = await fetch(DEX.next);
   const json = await res.json();
 
-  dexNextUrl = json.next; // null when done
-  const results = json.results || [];
+  DEX.next = json.next;
+  DEX.list = DEX.list.concat(json.results || []);
 
-  dexListCache = dexListCache.concat(results);
-  dexLoadingMore = false;
+  DEX.loading = false;
+  updateDexMoreBtn();
 }
 
-  function renderDexList(list) {
-    const el = $("dexList");
-    el.innerHTML = "";
-    const frag = document.createDocumentFragment();
+function updateDexMoreBtn(){
+  const btn = $("dexMoreBtn");
+  if (!btn) return;
+  btn.disabled = DEX.loading || !DEX.next;
+  btn.textContent = DEX.loading ? "Loading…" : (DEX.next ? "Load more" : "All loaded");
+}
 
-    list.forEach(p => {
-      const row = document.createElement("div");
-      row.textContent = cap(p.name.replace(/-/g, " "));
-      row.style.cssText = `
-        padding:8px; border-bottom:1px solid #1b1b1b;
-        cursor:pointer; user-select:none;
-      `;
-      row.onmouseenter = () => row.style.background = "#1f1f1f";
-      row.onmouseleave = () => row.style.background = "transparent";
-      row.onclick = () => showDexDetails(p.name);
-      frag.appendChild(row);
-    });
+function renderDexList(list){
+  const el = $("dexList");
+  el.innerHTML = "";
 
-    el.appendChild(frag);
+  const q = ($("dexSearch").value || "").trim().toLowerCase();
+  const filtered = q ? list.filter(p=>p.name.includes(q)) : list;
+
+  for (const p of filtered) {
+    const row = document.createElement("div");
+    row.className = "dexItem";
+    row.textContent = cap(p.name.replace(/-/g," "));
+    row.onclick = () => showDexDetails(p.name);
+    el.appendChild(row);
   }
 
-  async function showDexDetails(name) {
-    const details = $("dexDetails");
-    details.textContent = "Loading details…";
-
-    const p = await cachedFetchJson(`${POKEAPI}/pokemon/${name}`, `dex:${name}`, 1000*60*60*24*180);
-
-    const types = (p.types || []).sort((a,b)=>a.slot-b.slot).map(t=>cap(t.type.name)).join(" / ");
-    const stats = (p.stats || []).map(s => {
-      const n = s.stat?.name || "";
-      return `${cap(n.replace(/-/g," "))}: ${s.base_stat}`;
-    }).join("<br>");
-
-    // Show 8 example moves (names only) + note
-    const moves = (p.moves || []).slice(0, 8).map(m => cap(m.move.name.replace(/-/g," "))).join(", ");
-
-    details.innerHTML = `
-      <div style="display:flex; gap:10px; align-items:center;">
-        <div style="width:84px; height:84px; display:flex; align-items:center; justify-content:center; border:1px solid #222; border-radius:10px;">
-          ${p.sprites?.front_default ? `<img src="${p.sprites.front_default}" alt="" style="width:80px; height:80px;">` : "?"}
-        </div>
-        <div>
-          <div style="font-size:18px;"><strong>${cap(p.name.replace(/-/g," "))}</strong></div>
-          <div style="opacity:.85;">${types}</div>
-        </div>
-      </div>
-
-      <div style="margin-top:8px; line-height:1.35;">
-        ${stats}
-      </div>
-
-      <div style="margin-top:10px; opacity:.9;">
-        <strong>Example moves:</strong><br>
-        ${moves || "—"}
-        <div style="opacity:.7; margin-top:6px; font-size:12px;">
-          (Battle sim uses its own move-picking logic for each loaded Pokémon.)
-        </div>
-      </div>
-    `;
+  if (filtered.length === 0) {
+    el.innerHTML = `<div style="opacity:.7;">No results yet. Try loading more.</div>`;
   }
+}
 
-  // Make sure UI exists after page load
-  window.addEventListener("DOMContentLoaded", ensureDexUI);
-})();
+async function showDexDetails(name){
+  const details = $("dexDetails");
+  details.textContent = "Loading details…";
+
+  const p = await cachedFetchJson(`${POKEAPI}/pokemon/${name}`, `dex:${name}`, 1000*60*60*24*180);
+
+  const types = (p.types || []).sort((a,b)=>a.slot-b.slot).map(t=>cap(t.type.name)).join(" / ");
+  const stats = (p.stats || []).map(s => `${cap((s.stat?.name||"").replace(/-/g," "))}: ${s.base_stat}`).join("<br>");
+  const moves = (p.moves || []).slice(0, 10).map(m => cap(m.move.name.replace(/-/g," "))).join(", ");
+
+  details.innerHTML = `
+    <div style="display:flex; gap:10px; align-items:center;">
+      <div style="width:84px; height:84px; display:flex; align-items:center; justify-content:center; border:1px solid #222; border-radius:10px;">
+        ${p.sprites?.front_default ? `<img src="${p.sprites.front_default}" alt="" style="width:80px; height:80px;">` : "?"}
+      </div>
+      <div>
+        <div style="font-size:18px;"><strong>${cap(p.name.replace(/-/g," "))}</strong></div>
+        <div style="opacity:.85;">${types}</div>
+      </div>
+    </div>
+
+    <div style="margin-top:10px; line-height:1.4;">${stats}</div>
+
+    <div style="margin-top:10px; opacity:.9;">
+      <strong>Example moves:</strong><br>
+      ${moves || "—"}
+    </div>
+  `;
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  $("dexBtn").addEventListener("click", showDex);
+  $("dexClose").addEventListener("click", hideDex);
+  $("dexModal").addEventListener("click", (e) => { if (e.target.id === "dexModal") hideDex(); });
+
+  $("dexSearch").addEventListener("input", () => renderDexList(DEX.list));
+  $("dexMoreBtn").addEventListener("click", async () => {
+    await loadMoreDex();
+    renderDexList(DEX.list);
+  });
+});
